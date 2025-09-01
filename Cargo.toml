@@ -1,6 +1,6 @@
 [package]
 name = "annex"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.89"
 
@@ -9,17 +9,28 @@ anyhow = "1.0.99"
 thiserror = "2.0.16"
 tokio = { version = "1.47.1", features = ["rt-multi-thread","macros","fs","io-util","process","signal"] }
 serde = { version = "1.0.219", features = ["derive"] }
+serde_derive = "1.0.219"
 serde_json = "1.0.143"
-toml = "0.9.5"
+serde_yml = "0.0.12"                                # YAML (serde-based)
 directories = "6.0.0"
 notify = "8.2.0"
 parking_lot = "0.12.4"
 futures = "0.3.31"
 regex = "1.11.1"
-chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
-uuid = { version = "1.18.0", features = ["v4"] }
-async-trait = "0.1.89"
 globset = "0.4.16"
 ignore = "0.4.23"
 walkdir = "2.5.0"
 git2 = "0.20.2"
+uuid = { version = "1.18.0", features = ["v4"] }
+chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
+
+# ACP (Agent Client Protocol) -- pin to a commit to avoid drift.
+# You can update the rev whenever you want to track spec changes.
+[dependencies.agent-client-protocol]
+git = "https://github.com/zed-industries/agent-client-protocol"
+# branch = "main"         # or a tag if they add one
+# rev = "<insert-commit-sha>"
+
+# Optional TUI glue (ratatui/crossterm); you likely have these already in your TUI crate.
+# ratatui = "0.27"        # (not required here; only if you render status from this crate)
+# crossterm = "0.29"

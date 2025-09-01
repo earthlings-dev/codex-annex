@@ -1,7 +1,6 @@
 # annex
 Rust based extension to codex-rs
 
-
 # mods to codex-rs to integrate this package:
 
 ## Cargo.toml changes:
@@ -15,39 +14,42 @@ resolver = "2"
 ## Bootstrap this into Core:
 
 ```rust
-// core/src/services.rs (new)
+// core/src/services.rs
 use std::sync::Arc;
 use codex_ext::{
-  ConfigManager, HookRegistry, McpRuntime,
-  hooks::AuditLogHook,
-  slash::{SlashRegistry, AllowCommand, McpAddCommand, ConfigSetCommand, TodoCommand, CompactCommand, AutoCompactToggle},
-  compact::Compactor,
+  ConfigManager, HookRegistry, SlashRegistry,
+  session_log::SessionLogWriter,
+  yaml_config::{Scope, ModelRole},
+  hooks_yaml::HookContext,
+  taskset::{TaskSetRunner, TaskSetPlan, UiEvent},
+  todo_yaml::TodoStore,
+  compact::{Compactor, AutoCompactStage},
 };
 
 pub struct Services {
     pub cfg: Arc<ConfigManager>,
     pub hooks: Arc<HookRegistry>,
-    pub mcp: Arc<McpRuntime>,
     pub slash: Arc<SlashRegistry>,
-    pub compactor: Arc<Compactor>,
 }
 
 impl Services {
     pub async fn init(workspace_root: std::path::PathBuf) -> anyhow::Result<Self> {
         let cfg = Arc::new(ConfigManager::load(&workspace_root)?);
-        let hooks = Arc::new(HookRegistry::default());
-        hooks.register(std::sync::Arc::new(AuditLogHook)).await;
-        let mcp = Arc::new(McpRuntime::new(cfg.clone()));
-        mcp.reconcile().await?;
-        let mut sr = SlashRegistry::new();
-        sr.register(std::sync::Arc::new(AllowCommand { cfg: cfg.clone() }));
-        sr.register(std::sync::Arc::new(McpAddCommand { cfg: cfg.clone() }));
-        sr.register(std::sync::Arc::new(ConfigSetCommand { cfg: cfg.clone() }));
-        sr.register(std::sync::Arc::new(TodoCommand { cfg: cfg.clone(), workspace: workspace_root.clone() }));
-        sr.register(std::sync::Arc::new(CompactCommand { cfg: cfg.clone(), workspace: workspace_root.clone() }));
-        sr.register(std::sync::Arc::new(AutoCompactToggle { cfg: cfg.clone() }));
-        let compactor = Arc::new(Compactor::new(cfg.clone(), workspace_root.clone()));
-        Ok(Self { cfg, hooks, mcp, slash: Arc::new(sr), compactor })
+
+        // Hooks + Slash from YAML dirs (system/user/workspace)
+        let mut hook_dirs = vec![workspace_root.join(".codex").join("hooks")];
+        hook_dirs.extend(cfg.get().hooks.dirs.clone());
+        let hooks = Arc::new(HookRegistry::load_from_dirs(cfg.clone(), &hook_dirs)?);
+
+        let mut slash_dirs = vec![workspace_root.join(".codex").join("slash")];
+        slash_dirs.extend(cfg.get().slash.dirs.clone());
+        let slash = Arc::new(SlashRegistry::load_from_dirs(cfg.clone(), &slash_dirs)?);
+
+        // Session logs: setup + optional purge
+        let log = SessionLogWriter::new(&cfg, "SESSION-UUID")?; // you’ll generate per run
+        if let Some(days) = cfg.get().sessions.auto_purge_days { log.purge_old(days)?; }
+
+        Ok(Self { cfg, hooks, slash })
     }
 }
 ```
@@ -161,7 +163,31 @@ if services.compactor.should_autotrigger(last_compact, codex_ext::compact::AutoC
 }
 ```
 
-# Example configs:
+# Configs
+
+## File Layout
+
+.codex/
+  10-models.yaml                      # model routing (base_url, overrides, profiles)
+  20-shell.yaml
+  30-compact.yaml
+  40-sessions.yaml                    # dir, auto_purge_days, resume_on_launch
+  hooks/
+    10-audit.yaml
+    20-summarize.yaml
+  slash/
+    commands.yaml
+  tasks/
+    2025-08-31/SESSION-UUID/
+      set-01.yaml                     # TaskSetSpec
+      set-02.yaml
+  todos/
+    2025-08-31/SESSION-UUID/
+      001-<todoid>.yaml               # TodoItem (session/date/task_number)
+  sessions/
+    2025-08-31/SESSION-UUID/session.yaml  # rolling YAML log (messages + metadata)
+
+## Main Config 
 
 ```toml
 # .codex/config.toml
@@ -184,3 +210,84 @@ command = "/usr/local/bin/build-indexer"
 args = ["--fast"]
 scope = "workspace"
 ```
+
+## Model Configs
+
+```yaml
+# .codex/10-models.yaml
+models:
+  default:
+    name: gpt-4o-mini
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+  overrides:
+    title:
+      name: gpt-4o-mini
+    session_name:
+      name: gpt-4o-mini
+    compact:
+      name: gpt-4o-mini
+    meta_prompt:
+      name: gpt-4o-mini
+  profiles:
+    heavy:
+      name: gpt-4.1
+    fast:
+      name: gpt-4o-mini
+    google:
+      name: gemini-1.5-flash
+      base_url: https://generativelanguage.googleapis.com
+      api_key_env: GOOGLE_API_KEY
+    anthropic:
+      name: claude-3.7-sonnet
+      base_url: https://api.anthropic.com
+      api_key_env: ANTHROPIC_API_KEY
+```
+
+## Example Slash Commands
+
+
+```
+# .codex/slash/commands.yaml
+allow:
+  kind: builtin
+  name: allowlist.add
+  args: {}
+todo:
+  kind: alias
+  expands_to: "/todo $ARGS"
+compact:
+  kind: alias
+  expands_to: "/compact $ARGS"
+quick-title:
+  kind: macro
+  lines:
+    - "/config-set models.overrides.title.name gpt-4o-mini"
+    - "/run title $ARGS"
+``` 
+
+## Example Hooks (workspace)
+
+**.codex/hooks/\*.yaml**
+
+```yaml
+- name: audit-log
+  enabled: true
+  when: [post_exec, task_end]
+  actions:
+    - action: exec
+      cmd: bash
+      args: ["-lc", "echo \"$(date -Is) $CMD\" >> .codex/audit.log"]
+```
+
+```yaml
+- name: summarize-task
+  enabled: true
+  when: [task_end]
+  deny_on_fail: false
+  actions:
+    - action: prompt
+      model_profile: heavy
+      instruction: |
+        Generate a one-line status that explains what the task achieved and any blockers.
+``` 
