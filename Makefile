@@ -31,8 +31,4 @@ update:
 
 .PHONY: validate-taskset
 validate-taskset:
-	rustc -O scripts/validate_taskset.rs -o target/validate_taskset \
-		--extern jsonschema=$(shell dirname $$(rustc --print sysroot))/lib/rustlib/$(shell rustc -Vv | sed -n 's/^host: //p')/lib || true
-	@cargo run --quiet --bin __validate 2>/dev/null || true
-	@RUSTFLAGS='' cargo run --quiet 2>/dev/null || true
-	@echo "Usage: target/validate_taskset <path/to/set.json>"
+	cargo run -p xtask -- validate-taskset $(FILE)
