@@ -45,21 +45,20 @@ pub trait Hook: Send + Sync {
 pub struct HookRegistry {
     hooks: RwLock<Vec<Arc<dyn Hook>>>,
 }
-
 impl HookRegistry {
     pub fn new() -> Self { Self { hooks: RwLock::new(Vec::new()) } }
     pub async fn register(&self, hook: Arc<dyn Hook>) { self.hooks.write().await.push(hook); }
 
     pub async fn emit(&self, ctx: &HookContext, event: &HookEvent) -> Result<HookDecision> {
         let hooks = self.hooks.read().await.clone();
-        let mut merged_env_sets: BTreeMap<String, String> = BTreeMap::new();
-        let mut merged_env_removes: Vec<String> = vec![];
+        let mut merged_env_sets = BTreeMap::<String,String>::new();
+        let mut merged_env_removes = vec![];
         for h in hooks {
             match h.on_event(ctx, event).await? {
-                HookDecision::Continue => {},
+                HookDecision::Continue => {}
                 HookDecision::Deny { reason } => return Ok(HookDecision::Deny { reason }),
                 HookDecision::ModifyEnv { set, remove } => {
-                    for (k, v) in set { merged_env_sets.insert(k, v); }
+                    merged_env_sets.extend(set);
                     merged_env_removes.extend(remove);
                 }
             }
@@ -72,7 +71,8 @@ impl HookRegistry {
     }
 }
 
-/// Example hook: append exec transcript to a log in .codex
+/// Minimal example: append exec transcripts to `.codex/audit.log`
+/// Used by the compactor’s "recent file detection" heuristic.
 pub struct AuditLogHook;
 
 #[async_trait]
@@ -84,7 +84,7 @@ impl Hook for AuditLogHook {
         let log_dir = ctx.cwd.join(".codex");
         fs::create_dir_all(&log_dir)?;
         let mut f = OpenOptions::new().create(true).append(true).open(log_dir.join("audit.log"))?;
-        writeln!(f, "[{:?}] {:?}", chrono::Utc::now(), event)?;
+        writeln!(f, "[{}] {:?}", chrono::Utc::now().to_rfc3339(), event)?;
         Ok(HookDecision::Continue)
     }
 }

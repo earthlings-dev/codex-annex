@@ -7,7 +7,6 @@ use crate::layered_config::{Config, ConfigManager, McpServer};
 #[derive(Clone)]
 pub struct McpRuntime {
     cfg: Arc<ConfigManager>,
-    // naive connection map: name -> status
     state: Arc<RwLock<BTreeMap<String, McpState>>>,
 }
 
@@ -18,22 +17,18 @@ impl McpRuntime {
     pub fn new(cfg: Arc<ConfigManager>) -> Self {
         Self { cfg, state: Arc::new(RwLock::new(BTreeMap::new())) }
     }
-
     pub fn snapshot(&self) -> BTreeMap<String, McpState> { self.state.read().clone() }
-
     pub async fn reconcile(&self) -> Result<()> {
         let cfg = self.cfg.get();
         for (name, server) in cfg.mcp.servers.iter() {
             if !server.enabled {
                 self.state.write().insert(name.clone(), McpState::Disconnected);
-                continue;
+            } else {
+                self.state.write().insert(name.clone(), McpState::Connected);
             }
-            // Here you’d launch/ensure connection; for now we mock success.
-            self.state.write().insert(name.clone(), McpState::Connected);
         }
         Ok(())
     }
-
     pub async fn set_enabled(&self, name: &str, enabled: bool) -> Result<()> {
         let mut patch = Config::default();
         if let Some(mut s) = self.cfg.get().mcp.servers.get(name).cloned() {

@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 pub struct AgentProfile {
     pub name: String,
     pub model: String,
-    pub sandbox_mode: Option<String>,     // tie to SandboxConfig
-    pub shell_allowlist: Vec<String>,     // isolate tools per agent
-    pub mcp_enabled: Vec<String>,         // subset of server names
+    pub sandbox_mode: Option<String>,
+    pub shell_allowlist: Vec<String>,
+    pub mcp_enabled: Vec<String>,
     pub system_prompt: Option<String>,
 }
 
@@ -16,7 +16,6 @@ pub struct AgentProfile {
 pub struct AgentDirectory {
     pub profiles: BTreeMap<String, AgentProfile>,
 }
-
 impl AgentDirectory {
     pub fn get(&self, name: &str) -> Option<&AgentProfile> { self.profiles.get(name) }
     pub fn upsert(&mut self, p: AgentProfile) { self.profiles.insert(p.name.clone(), p); }

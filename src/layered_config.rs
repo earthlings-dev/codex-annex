@@ -15,6 +15,8 @@ pub struct Config {
     pub mcp: McpConfig,
     pub ui: UiConfig,
     pub history: HistoryConfig,
+    pub todo: TodoConfig,
+    pub compact: CompactConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -26,8 +28,8 @@ impl Default for ApprovalMode { fn default() -> Self { Self::OnRequest } }
 #[serde(default)]
 pub struct ModelConfig {
     pub name: Option<String>,
-    pub reasoning_effort: Option<String>,   // map to protocol ReasoningEffort if present
-    pub reasoning_summary: Option<String>,  // map to protocol ReasoningSummary if present
+    pub reasoning_effort: Option<String>,
+    pub reasoning_summary: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -42,10 +44,10 @@ pub struct SandboxConfig {
 #[serde(default)]
 pub struct ShellConfig {
     pub approval: ApprovalMode,
-    pub allowlist_roots: Vec<String>,      // e.g., ["git", "rg", "ls", "cat", "cargo"]
+    pub allowlist_roots: Vec<String>,      // e.g., ["git","rg","ls","cat","cargo"]
     pub denylist_roots: Vec<String>,
     pub environment_inherit: Option<String>,  // "none" | "core" | "all"
-    pub env_exclude_patterns: Vec<String>,    // ["*KEY*", "*TOKEN*"] etc.
+    pub env_exclude_patterns: Vec<String>,    // ["*KEY*","*TOKEN*"]
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -65,6 +67,39 @@ pub struct HistoryConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
+pub struct TodoConfig {
+    pub path: Option<PathBuf>,   // defaults to .codex/todo.json
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompactConfig {
+    /// Enable auto-compact background heuristic.
+    pub auto_enable: bool,
+    /// Minimum seconds between auto-compacts.
+    pub auto_min_interval_secs: u64,
+    /// Trigger auto-compact at task end.
+    pub auto_on_task_end: bool,
+    /// Heuristic thresholds.
+    pub max_context_chars: usize,   // soft target for summary input assembly
+    pub max_files: usize,           // cap included file list
+    pub include_globs_default: Vec<String>, // baseline patterns for manual/auto
+}
+impl Default for CompactConfig {
+    fn default() -> Self {
+        Self {
+            auto_enable: true,
+            auto_min_interval_secs: 120,
+            auto_on_task_end: true,
+            max_context_chars: 40_000,
+            max_files: 24,
+            include_globs_default: vec!["**/*.rs".into(),"**/*.md".into(),"**/*.toml".into()],
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct McpConfig {
     pub servers: BTreeMap<String, McpServer>,
 }
@@ -79,7 +114,7 @@ pub struct McpServer {
     pub env: BTreeMap<String, String>,
     pub host: Option<String>,              // for tcp
     pub port: Option<u16>,
-    pub scope: Option<String>,             // "system" | "user" | "workspace" (for display)
+    pub scope: Option<String>,             // "system" | "user" | "workspace" (for UI)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -88,10 +123,8 @@ pub enum Scope { System, User, Workspace, Runtime }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PartialConfig(pub Config);
-// Using `Option`-rich fields above means serde default + merge works.
 
 fn merge(a: &mut Config, b: &Config) {
-    // Shallow merge: "b" overlays "a"; for nested collections, overlay by presence.
     let overlay = |dst: &mut Option<String>, src: &Option<String>| { if src.is_some() { *dst = src.clone(); } };
     overlay(&mut a.model.name, &b.model.name);
     overlay(&mut a.model.reasoning_effort, &b.model.reasoning_effort);
@@ -114,7 +147,17 @@ fn merge(a: &mut Config, b: &Config) {
 
     overlay(&mut a.history.persist, &b.history.persist);
 
-    // MCP servers: overlay by key
+    if b.todo.path.is_some() { a.todo.path = b.todo.path.clone(); }
+
+    // compact
+    a.compact.auto_enable |= b.compact.auto_enable;
+    if b.compact.auto_min_interval_secs != 0 { a.compact.auto_min_interval_secs = b.compact.auto_min_interval_secs; }
+    a.compact.auto_on_task_end |= b.compact.auto_on_task_end;
+    if b.compact.max_context_chars != 0 { a.compact.max_context_chars = b.compact.max_context_chars; }
+    if b.compact.max_files != 0 { a.compact.max_files = b.compact.max_files; }
+    if !b.compact.include_globs_default.is_empty() { a.compact.include_globs_default = b.compact.include_globs_default.clone(); }
+
+    // MCP servers
     for (k, v) in &b.mcp.servers { a.mcp.servers.insert(k.clone(), v.clone()); }
 }
 
@@ -134,7 +177,6 @@ fn config_paths(workspace_root: &Path) -> Result<(PathBuf, PathBuf, PathBuf)> {
 pub struct ConfigManager {
     inner: Arc<RwLock<Config>>,
     tx: broadcast::Sender<Config>,
-    // Keep watcher handles alive:
     _watcher: Arc<RwLock<Option<notify::RecommendedWatcher>>>,
     system_path: PathBuf,
     user_path: PathBuf,
@@ -145,17 +187,17 @@ pub struct ConfigManager {
 impl ConfigManager {
     pub fn load(workspace_root: impl AsRef<Path>) -> Result<Self> {
         let (system_path, user_path, workspace_path) = config_paths(workspace_root.as_ref())?;
-        let mut base = Config::default();
-        let mut cm = Self {
-            inner: Arc::new(RwLock::new(base.clone())),
-            tx: broadcast::channel(32).0,
+        let cm = Self {
+            inner: Arc::new(RwLock::new(Config::default())),
+            tx: broadcast::channel(64).0,
             _watcher: Arc::new(RwLock::new(None)),
             system_path, user_path, workspace_path,
             runtime_overlay: Arc::new(RwLock::new(Config::default())),
         };
-        cm.reload_all()?;
-        cm.start_watch()?;
-        Ok(cm)
+        let mut me = cm;
+        me.reload_all()?;
+        me.start_watch()?;
+        Ok(me)
     }
 
     fn read_file(path: &Path) -> Option<Config> {
@@ -186,7 +228,6 @@ impl ConfigManager {
 
         let mut watcher = recommended_watcher(move |res: Result<Event, _>| {
             if res.is_err() { return; }
-            // Recompute on any file touch.
             let mut merged = Config::default();
             if let Some(sys) = ConfigManager::read_file(&system) { merge(&mut merged, &sys); }
             if let Some(usr) = ConfigManager::read_file(&user) { merge(&mut merged, &usr); }
@@ -204,41 +245,31 @@ impl ConfigManager {
     }
 
     pub fn get(&self) -> Config { self.inner.read().clone() }
+    pub fn subscribe(&self) -> broadcast::Receiver<Config> { self.tx.subscribe() }
 
-    /// Apply an ephemeral (runtime) overlay; does not write files.
     pub fn apply_runtime_overlay(&self, patch: Config) -> Result<()> {
         {
             let mut rt = self.runtime_overlay.write();
             merge(&mut *rt, &patch);
         }
-        // Trigger recompute
-        let mut merged = Config::default();
-        if let Some(sys) = Self::read_file(&self.system_path) { merge(&mut merged, &sys); }
-        if let Some(usr) = Self::read_file(&self.user_path) { merge(&mut merged, &usr); }
-        if let Some(ws)  = Self::read_file(&self.workspace_path) { merge(&mut merged, &ws); }
-        let rt = self.runtime_overlay.read().clone();
-        merge(&mut merged, &rt);
-        *self.inner.write() = merged.clone();
-        let _ = self.tx.send(merged);
-        Ok(())
+        self.reload_all()
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<Config> { self.tx.subscribe() }
-
-    /// Write a patch to a specific scope file (creates it if missing).
     pub fn write_patch(&self, scope: Scope, patch: &Config) -> Result<()> {
+        use std::io::Write;
         let path = match scope {
             Scope::System   => &self.system_path,
             Scope::User     => &self.user_path,
             Scope::Workspace=> &self.workspace_path,
             Scope::Runtime  => anyhow::bail!("Runtime scope is ephemeral; cannot persist"),
         };
-        fs::create_dir_all(path.parent().unwrap())?;
+        if let Some(dir) = path.parent() { fs::create_dir_all(dir)?; }
         let current = Self::read_file(path).unwrap_or_default();
         let mut merged = current.clone();
         merge(&mut merged, patch);
         let text = toml::to_string_pretty(&PartialConfig(merged)).context("serialize toml")?;
-        fs::write(path, text)?;
+        let mut f = fs::File::create(path)?;
+        f.write_all(text.as_bytes())?;
         Ok(())
     }
 }
