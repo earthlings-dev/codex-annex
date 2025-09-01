@@ -1,4 +1,5 @@
-// codex-ext/src/git_hooks.rs (sketch)
+// annex/src/git_hooks.rs
+
 use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
 pub fn install_pre_commit(repo_root: &Path) -> anyhow::Result<()> {

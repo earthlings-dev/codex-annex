@@ -1,3 +1,5 @@
+// annex/src/lib.rs
+
 pub mod yaml_config;       // multi-scope YAML config + model routing
 pub mod session_log;       // YAML session logs (+ purge and resume)
 pub mod hooks_yaml;        // YAML-defined hooks (exec & prompt) + recursion limit

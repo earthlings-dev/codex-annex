@@ -1,3 +1,5 @@
+// annex/src/layered_config.rs
+
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use notify::{recommended_watcher, Event, RecursiveMode, Watcher};
