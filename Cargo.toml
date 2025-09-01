@@ -6,6 +6,14 @@ version = "0.3.0"
 edition = "2024"
 rust-version = "1.89"
 
+[features]
+default = ["stdio"]
+# Gate transports explicitly so we can build small binaries in CI if desired
+stdio = ["rmcp/transport-io"]
+sse = ["rmcp/transport-sse-server"]
+streamable_http = ["rmcp/transport-streamable-http-server"]
+macros = ["rmcp/macros"]
+
 [dependencies]
 anyhow = "1.0.99"
 thiserror = "2.0.16"
@@ -25,6 +33,17 @@ walkdir = "2.5.0"
 git2 = "0.20.2"
 uuid = { version = "1.18.0", features = ["v4"] }
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
+ratatui = "0.27"
+crossterm = "0.29"
+# Pin to submodule path so we control version
+rmcp = { path = "external/mcp-rust-sdk/crates/rmcp", default-features = false, features = ["server", "macros"] }
+tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "signal", "sync", "net"] }
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+http = "1.1"
+hyper = { version = "1.4", features = ["http1", "server"] }
+tower = "0.4"
 
 # ACP (Agent Client Protocol) -- pin to a commit to avoid drift.
 # You can update the rev whenever you want to track spec changes.
@@ -33,6 +52,3 @@ git = "https://github.com/zed-industries/agent-client-protocol"
 # branch = "main"         # or a tag if they add one
 # rev = "<insert-commit-sha>"
 
-# Optional TUI glue (ratatui/crossterm); you likely have these already in your TUI crate.
-# ratatui = "0.27"        # (not required here; only if you render status from this crate)
-# crossterm = "0.29"
