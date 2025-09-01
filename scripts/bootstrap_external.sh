@@ -14,6 +14,10 @@ add() {
 
 mkdir -p "$root/external"
 
+# OpenAI's Codex (including codex-rs)
+
+add "https://github.com/openai/codex" "external/openai-codex"
+
 # MCP Rust SDK (official)
 add "https://github.com/modelcontextprotocol/rust-sdk" "external/mcp-rust-sdk"
 
@@ -26,19 +30,17 @@ add "https://github.com/langchain-ai/agent-protocol" "external/agent-protocol"
 # A2A (Agent2Agent)
 add "https://github.com/a2aproject/A2A" "external/a2a"
 
-git submodule update --init --recursive
+git submodule update --init --recursive --jobs 5
 
 # Keep checkouts lean with sparse
+git -C "$root/external/openai-codex" sparse-checkout init --cone || true
+
 git -C "$root/external/mcp-rust-sdk" sparse-checkout init --cone || true
-git -C "$root/external/mcp-rust-sdk" sparse-checkout set crates README.md || true
 
 git -C "$root/external/agent-client-protocol" sparse-checkout init --cone || true
-git -C "$root/external/agent-client-protocol" sparse-checkout set rust schema Cargo.toml README.md || true
 
 git -C "$root/external/agent-protocol" sparse-checkout init --cone || true
-git -C "$root/external/agent-protocol" sparse-checkout set openapi.json api.html server README.md || true
 
 git -C "$root/external/a2a" sparse-checkout init --cone || true
-git -C "$root/external/a2a" sparse-checkout set specification README.md || true
 
 echo "✔ external submodules added and sparsified"
