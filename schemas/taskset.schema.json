@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/taskset.schema.json",
+  "title": "TaskSetPlan",
+  "type": "object",
+  "required": ["sets"],
+  "properties": {
+    "session_id": { "type": "string" },
+    "sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["set_id", "title", "mode", "tasks"],
+        "properties": {
+          "set_id": { "type": "string" },
+          "title": { "type": "string" },
+          "mode": { "enum": ["parallel", "sequential"] },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "name", "steps"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "model_profile": { "type": "string" },
+                "status_line": { "type": "string" },
+                "success_criteria": { "type": "string" },
+                "on_error": { "type": "string" },
+                "steps": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                      "type": { "enum": ["chat", "exec", "mcp_call", "git"] },
+                      "prompt": { "type": "string" },
+                      "model_profile": { "type": "string" },
+                      "cmd": { "type": "string" },
+                      "args": { "type": "array", "items": { "type": "string" } },
+                      "server": { "type": "string" },
+                      "method": { "type": "string" },
+                      "payload": {}
+                    },
+                    "allOf": [
+                      {
+                        "if": { "properties": { "type": { "const": "chat" } } },
+                        "then": { "required": ["prompt"] }
+                      },
+                      {
+                        "if": { "properties": { "type": { "const": "exec" } } },
+                        "then": { "required": ["cmd"] }
+                      },
+                      {
+                        "if": { "properties": { "type": { "const": "mcp_call" } } },
+                        "then": { "required": ["server", "method"] }
+                      },
+                      {
+                        "if": { "properties": { "type": { "const": "git" } } },
+                        "then": { "required": ["action"] }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

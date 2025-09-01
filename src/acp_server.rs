@@ -3,7 +3,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 use agent_client_protocol as acp; // from zed-industries repo
-use crate::{yaml_config::ConfigManager, taskset::{TaskSetPlan}, hooks_yaml::HookRegistry, todo_yaml::TodoStore};
+use crate::{layered_config::ConfigManager, taskset::TaskSetPlan, hooks::HookRegistry, todo::TodoStore};
 
 /// Starts an ACP server on stdio so Zed (or other ACP clients) can spawn Codex-rs as an agent.
 /// NOTE: ACP is evolving; pin the git rev for stability. See schema in the repo.

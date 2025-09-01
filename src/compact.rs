@@ -8,7 +8,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::{BTreeMap, BTreeSet}, fs, path::{Path, PathBuf}, time::{Duration, SystemTime}};
 
-use crate::{layered_config::ConfigManager, todo::{TodoStore, TodoStatus}, hooks::{HookContext}};
+use crate::{layered_config::ConfigManager, todo::{TodoStore, TodoStatus}, hooks::HookContext};
 
 #[derive(Clone, Copy, Debug)]
 pub enum AutoCompactStage {

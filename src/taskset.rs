@@ -7,8 +7,8 @@ use std::{sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-  yaml_config::{ConfigManager, ModelRole},
-  hooks_yaml::{HookRegistry, HookContext, HookEvent},
+  layered_config::{ConfigManager, ModelRole},
+  hooks::{HookRegistry, HookContext, HookEvent},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

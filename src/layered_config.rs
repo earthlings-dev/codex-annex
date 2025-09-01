@@ -11,7 +11,10 @@ use tokio::sync::broadcast;
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {
+    // Legacy minimal model knob (kept for backward compat with early drafts)
     pub model: ModelConfig,
+    // New routing & profiles (source of truth)
+    pub models: ModelsConfig,
     pub sandbox: SandboxConfig,
     pub shell: ShellConfig,
     pub mcp: McpConfig,
@@ -19,6 +22,9 @@ pub struct Config {
     pub history: HistoryConfig,
     pub todo: TodoConfig,
     pub compact: CompactConfig,
+    pub sessions: SessionsConfig,
+    pub hooks: HooksConfig,
+    pub slash: SlashConfigMeta,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,6 +38,39 @@ pub struct ModelConfig {
     pub name: Option<String>,
     pub reasoning_effort: Option<String>,
     pub reasoning_summary: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ModelsConfig {
+    /// Default chat/completion model (used unless overridden)
+    pub default: ModelTarget,
+    /// Map of function-role -> model target; e.g. "title", "session_name", "compact", "meta_prompt", "task_status"
+    pub overrides: BTreeMap<String, ModelTarget>,
+    /// Named profiles you can reference in tasks (per-task model label)
+    pub profiles: BTreeMap<String, ModelTarget>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ModelTarget {
+    pub name: String,                        // e.g. "gpt-4o-mini", "gemini-1.5-pro"
+    pub base_url: Option<String>,            // e.g. "https://api.openai.com/v1"
+    /// Name of env var carrying an API key (if provider uses a key)
+    pub api_key_env: Option<String>,         // e.g. OPENAI_API_KEY
+    /// Name of env var carrying an API token (if provider uses bearer tokens)
+    pub api_token_env: Option<String>,       // e.g. ANTHROPIC_API_KEY or custom token
+    pub extra_headers: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ModelRole {
+    Chat,
+    Title,
+    SessionName,
+    Compact,
+    MetaPrompt,
+    TaskStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -102,6 +141,31 @@ impl Default for CompactConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
+pub struct SessionsConfig {
+    pub dir: Option<PathBuf>,              // default: ~/.local/share/codex/sessions
+    pub auto_purge_days: Option<u32>,
+    pub resume_on_launch: bool,
+    /// "json" | "jsonl" | "both" (default)
+    pub write_mode: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct HooksConfig {
+    pub recursion_limit: Option<u32>,
+    /// Additional lookup dirs for hooks/*.toml
+    pub dirs: Vec<PathBuf>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SlashConfigMeta {
+    /// Lookup dirs for slash/*.toml
+    pub dirs: Vec<PathBuf>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct McpConfig {
     pub servers: BTreeMap<String, McpServer>,
 }
@@ -132,6 +196,11 @@ fn merge(a: &mut Config, b: &Config) {
     overlay(&mut a.model.reasoning_effort, &b.model.reasoning_effort);
     overlay(&mut a.model.reasoning_summary, &b.model.reasoning_summary);
 
+    // models routing
+    if !b.models.default.name.is_empty() { a.models.default = b.models.default.clone(); }
+    for (k, v) in &b.models.overrides { a.models.overrides.insert(k.clone(), v.clone()); }
+    for (k, v) in &b.models.profiles { a.models.profiles.insert(k.clone(), v.clone()); }
+
     overlay(&mut a.sandbox.mode, &b.sandbox.mode);
     if let Some(v) = b.sandbox.network_access { a.sandbox.network_access = Some(v); }
     if !b.sandbox.writable_roots.is_empty() { a.sandbox.writable_roots = b.sandbox.writable_roots.clone(); }
@@ -158,6 +227,19 @@ fn merge(a: &mut Config, b: &Config) {
     if b.compact.max_context_chars != 0 { a.compact.max_context_chars = b.compact.max_context_chars; }
     if b.compact.max_files != 0 { a.compact.max_files = b.compact.max_files; }
     if !b.compact.include_globs_default.is_empty() { a.compact.include_globs_default = b.compact.include_globs_default.clone(); }
+
+    // sessions
+    if b.sessions.dir.is_some() { a.sessions.dir = b.sessions.dir.clone(); }
+    if b.sessions.auto_purge_days.is_some() { a.sessions.auto_purge_days = b.sessions.auto_purge_days; }
+    a.sessions.resume_on_launch |= b.sessions.resume_on_launch;
+    overlay(&mut a.sessions.write_mode, &b.sessions.write_mode);
+
+    // hooks
+    if b.hooks.recursion_limit.is_some() { a.hooks.recursion_limit = b.hooks.recursion_limit; }
+    if !b.hooks.dirs.is_empty() { a.hooks.dirs = b.hooks.dirs.clone(); }
+
+    // slash
+    if !b.slash.dirs.is_empty() { a.slash.dirs = b.slash.dirs.clone(); }
 
     // MCP servers
     for (k, v) in &b.mcp.servers { a.mcp.servers.insert(k.clone(), v.clone()); }
@@ -273,5 +355,30 @@ impl ConfigManager {
         let mut f = fs::File::create(path)?;
         f.write_all(text.as_bytes())?;
         Ok(())
+    }
+
+    /// Pick a model target given a function role. Falls back to default chat model.
+    pub fn pick_model(&self, role: ModelRole) -> ModelTarget {
+        let cfg = self.get();
+        let key = match role {
+            ModelRole::Chat => None,
+            ModelRole::Title => Some("title"),
+            ModelRole::SessionName => Some("session_name"),
+            ModelRole::Compact => Some("compact"),
+            ModelRole::MetaPrompt => Some("meta_prompt"),
+            ModelRole::TaskStatus => Some("task_status"),
+        };
+        if let Some(k) = key {
+            if let Some(t) = cfg.models.overrides.get(k) { return t.clone(); }
+        }
+        cfg.models.default.clone()
+    }
+
+    /// Helper: resolve API credentials from environment for a target.
+    /// Returns (api_key, api_token) as discovered (both optional).
+    pub fn resolve_credentials(&self, target: &ModelTarget) -> (Option<String>, Option<String>) {
+        let key = target.api_key_env.as_ref().and_then(|k| std::env::var(k).ok());
+        let tok = target.api_token_env.as_ref().and_then(|k| std::env::var(k).ok());
+        (key, tok)
     }
 }

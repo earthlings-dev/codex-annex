@@ -7,21 +7,15 @@ edition = "2024"
 rust-version = "1.89"
 
 [features]
-default = ["stdio"]
-# Gate transports explicitly so we can build small binaries in CI if desired
-stdio = ["rmcp/transport-io"]
-sse = ["rmcp/transport-sse-server"]
-streamable_http = ["rmcp/transport-streamable-http-server"]
-macros = ["rmcp/macros"]
+default = []
 
 [dependencies]
 anyhow = "1.0.99"
 thiserror = "2.0.16"
-tokio = { version = "1.47.1", features = ["rt-multi-thread","macros","fs","io-util","process","signal"] }
+tokio = { version = "1.38", features = ["rt-multi-thread","macros","fs","io-util","process","signal","sync","net"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_derive = "1.0.219"
 serde_json = "1.0.143"
-serde_yml = "0.0.12"                                # YAML (serde-based)
 directories = "6.0.0"
 notify = "8.2.0"
 parking_lot = "0.12.4"
@@ -35,15 +29,11 @@ uuid = { version = "1.18.0", features = ["v4"] }
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 ratatui = "0.27"
 crossterm = "0.29"
-# Pin to submodule path so we control version
-rmcp = { path = "external/mcp-rust-sdk/crates/rmcp", default-features = false, features = ["server", "macros"] }
-tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "signal", "sync", "net"] }
-clap = { version = "4.5", features = ["derive"] }
+
+toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-http = "1.1"
-hyper = { version = "1.4", features = ["http1", "server"] }
-tower = "0.4"
+jsonschema = "0.17"
 
 # ACP (Agent Client Protocol) -- pin to a commit to avoid drift.
 # You can update the rev whenever you want to track spec changes.
@@ -51,4 +41,3 @@ tower = "0.4"
 git = "https://github.com/zed-industries/agent-client-protocol"
 # branch = "main"         # or a tag if they add one
 # rev = "<insert-commit-sha>"
-

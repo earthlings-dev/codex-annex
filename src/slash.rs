@@ -1,56 +1,87 @@
-// annex/src/slash.rs
-// this is an in-progress file that needs to be merged & needed portions that are gaps converted to the yaml implementation, & unneeded portions (from the non-yaml implementation) removed
-
-// annex/src/slash_yaml.rs content below
+// annex/src/slash.rs — directory TOML files with alias/macro/builtins
 
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
 
-use crate::yaml_config::{ConfigManager, Scope};
+use crate::layered_config::{Config, ConfigManager, Scope};
 
 #[derive(Clone)]
 pub struct SlashRegistry {
-    pub commands: BTreeMap<String, SlashDef>,
+    aliases: BTreeMap<String, String>,
+    macros: BTreeMap<String, Vec<String>>,
+    builtins: BTreeMap<String, BTreeMap<String, String>>, // name -> args
     cfg: Arc<ConfigManager>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag="kind", rename_all="snake_case")]
-pub enum SlashDef {
-    Alias { expands_to: String },
-    Macro { lines: Vec<String> },
-    Builtin { name: String, args: BTreeMap<String,String> },
+#[derive(Default, Deserialize)]
+struct SlashTomlFile {
+    #[serde(default)]
+    alias: BTreeMap<String, String>,
+    #[serde(default, rename = "macro")]
+    macros: Vec<SlashMacro>,
+    #[serde(default)]
+    builtin: BTreeMap<String, BTreeMap<String, String>>,
 }
+
+#[derive(Clone, Debug, Deserialize)]
+struct SlashMacro { name: String, lines: Vec<String> }
 
 impl SlashRegistry {
     pub fn load_from_dirs(cfg: Arc<ConfigManager>, dirs: &[PathBuf]) -> Result<Self> {
-        let mut commands = BTreeMap::new();
+        let mut aliases = BTreeMap::new();
+        let mut macros: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut builtins: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
         for d in dirs {
             if !d.exists() { continue; }
             for e in fs::read_dir(d)? {
                 let p = e?.path();
-                if p.extension().is_some_and(|x| x=="yaml"||x=="yml") {
+                if p.extension().is_some_and(|x| x=="toml") {
                     let text = fs::read_to_string(&p)?;
-                    let items: BTreeMap<String, SlashDef> = serde_yml::from_str(&text)?;
-                    commands.extend(items);
+                    let f: SlashTomlFile = toml::from_str(&text)?;
+                    aliases.extend(f.alias);
+                    for m in f.macros { macros.insert(m.name, m.lines); }
+                    for (k, v) in f.builtin { builtins.insert(k, v); }
                 }
             }
         }
-        Ok(Self { commands, cfg })
+        Ok(Self { aliases, macros, builtins, cfg })
     }
 
     pub async fn dispatch(&self, input: &str) -> Result<String> {
         if !input.starts_with('/') { return Err(anyhow!("not a slash command")); }
         let (name, rest) = input[1..].split_once(' ').map(|(a,b)| (a,b)).unwrap_or((&input[1..], ""));
-        let def = self.commands.get(name).ok_or_else(|| anyhow!("unknown slash: {}", name))?;
-        match def {
-            SlashDef::Alias { expands_to } => Ok(expands_to.replace("$ARGS", rest)),
-            SlashDef::Macro { lines } => Ok(lines.join("\n")),
-            SlashDef::Builtin { name, args } => {
-                // You can map to functions e.g. "allowlist.add", "mcp.add", "config.set"
-                Ok(format!("builtin:{} {}", name, serde_json::to_string(args)?))
+        if let Some(expands) = self.aliases.get(name) {
+            return Ok(expands.replace("$ARGS", rest));
+        }
+        if let Some(lines) = self.macros.get(name) {
+            return Ok(lines.join("\n"));
+        }
+        if let Some(args) = self.builtins.get(name) {
+            return self.dispatch_builtin(name, rest.trim(), args).await;
+        }
+        Err(anyhow!("unknown slash: {}", name))
+    }
+
+    async fn dispatch_builtin(&self, name: &str, argstr: &str, args: &BTreeMap<String, String>) -> Result<String> {
+        match name {
+            "config-set" => {
+                // expects: path value
+                let parts: Vec<&str> = argstr.split_whitespace().collect();
+                if parts.len() < 2 { return Err(anyhow!("usage: /config-set <path> <value>")); }
+                let path = parts[0]; let value = parts[1..].join(" ");
+                let mut patch = Config::default();
+                match path {
+                    "model.name" => patch.model.name = Some(value),
+                    "history.persist" => patch.history.persist = Some(value),
+                    "sandbox.mode" => patch.sandbox.mode = Some(value),
+                    "sandbox.network_access" => patch.sandbox.network_access = Some(value.parse::<bool>()?),
+                    _ => return Err(anyhow!("unsupported path: {}", path)),
+                }
+                self.cfg.apply_runtime_overlay(patch)?;
+                Ok("runtime overlay applied".into())
             }
+            _ => Ok(format!("builtin:{} {}", name, serde_json::to_string(args)?)),
         }
     }
 }

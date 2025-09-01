@@ -18,13 +18,21 @@ build: init patch
 	cargo build --workspace
 
 install: init patch
-	# Install only codex-owned bins; no annex binary.
-	cargo install --path external/openai-codex/codex-cli \
-		--features "annex,annex-mcp,annex-mcp-sse,annex-mcp-stream" --force
-	@echo "✔ installed: codex (existing bin) and codex-mcp (new bin)"
+    # Install only codex-owned bins; annex is a feature-gated extension.
+    cargo install --path external/openai-codex/codex-cli \
+        --features "annex,annex-mcp,annex-mcp-sse,annex-mcp-stream" --force
+    @echo "✔ installed: codex with annex features"
 
 update:
 	@git submodule sync --recursive
 	@git submodule update --remote --recursive --jobs 4
 	@git add external/* || true
 	@git commit -m "chore: bump external submodules" || true
+
+.PHONY: validate-taskset
+validate-taskset:
+	rustc -O scripts/validate_taskset.rs -o target/validate_taskset \
+		--extern jsonschema=$(shell dirname $$(rustc --print sysroot))/lib/rustlib/$(shell rustc -Vv | sed -n 's/^host: //p')/lib || true
+	@cargo run --quiet --bin __validate 2>/dev/null || true
+	@RUSTFLAGS='' cargo run --quiet 2>/dev/null || true
+	@echo "Usage: target/validate_taskset <path/to/set.json>"

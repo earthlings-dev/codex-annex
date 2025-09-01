@@ -1,5 +1,5 @@
 # annex
-Rust based extension to codex-rs
+Rust-based extension to codex-rs (feature-gated, no standalone annex binary)
 
 # mods to codex-rs to integrate this package:
 
@@ -18,9 +18,9 @@ resolver = "2"
 use std::sync::Arc;
 use codex_ext::{
   ConfigManager, HookRegistry, SlashRegistry,
-  session_log::SessionLogWriter,
-  yaml_config::{Scope, ModelRole},
-  hooks_yaml::HookContext,
+  session_logs::SessionLogWriter,
+  layered_config::{Scope, ModelRole},
+  hooks::HookContext,
   taskset::{TaskSetRunner, TaskSetPlan, UiEvent},
   todo_yaml::TodoStore,
   compact::{Compactor, AutoCompactStage},
@@ -36,7 +36,7 @@ impl Services {
     pub async fn init(workspace_root: std::path::PathBuf) -> anyhow::Result<Self> {
         let cfg = Arc::new(ConfigManager::load(&workspace_root)?);
 
-        // Hooks + Slash from YAML dirs (system/user/workspace)
+// Hooks + Slash from TOML dirs (system/user/workspace)
         let mut hook_dirs = vec![workspace_root.join(".codex").join("hooks")];
         hook_dirs.extend(cfg.get().hooks.dirs.clone());
         let hooks = Arc::new(HookRegistry::load_from_dirs(cfg.clone(), &hook_dirs)?);
@@ -168,80 +168,94 @@ if services.compactor.should_autotrigger(last_compact, codex_ext::compact::AutoC
 ## File Layout
 
 .codex/
-  10-models.yaml                      # model routing (base_url, overrides, profiles)
-  20-shell.yaml
-  30-compact.yaml
-  40-sessions.yaml                    # dir, auto_purge_days, resume_on_launch
-  hooks/
-    10-audit.yaml
-    20-summarize.yaml
-  slash/
-    commands.yaml
-  tasks/
-    2025-08-31/SESSION-UUID/
-      set-01.yaml                     # TaskSetSpec
-      set-02.yaml
-  todos/
-    2025-08-31/SESSION-UUID/
-      001-<todoid>.yaml               # TodoItem (session/date/task_number)
-  sessions/
-    2025-08-31/SESSION-UUID/session.yaml  # rolling YAML log (messages + metadata)
+  config.toml                   # main config (models, shell, sessions, hooks, slash, mcp)
+  hooks/                        # *.toml hook definitions
+  slash/                        # *.toml slash alias/macro/builtins
+  tasks/                        # dated TaskSet specs (JSON)
+    YYYY-MM-DD/SESSION-UUID/set-01.json
+  todos/                        # TODO store (JSON file; path configurable)
+  sessions/                     # session logs (JSON and JSONL)
+    YYYY-MM-DD/SESSION-UUID/session.json
+    YYYY-MM-DD/SESSION-UUID/session.jsonl
 
-## Main Config 
+## Main Config
 
 ```toml
-# .codex/config.toml
+# .codex/config.toml (excerpt)
 [ui]
 command_palette = true
 status_bar = true
-
-[model]
-name = "gpt-omni-mini"   # whatever your backend supports
 
 [shell]
 allowlist_roots = ["git","rg","ls","cat","cargo"]
 environment_inherit = "core"
 env_exclude_patterns = ["*KEY*","*TOKEN*"]
 
-[mcp.servers.build_indexer]
+[sessions]
+write_mode = "both"  # json | jsonl | both
+
+[models.default]
+name = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+[models.profiles.fast]
+name = "gpt-4o-mini"
+
+[mcp.servers.everything]
 enabled = true
 transport = "stdio"
-command = "/usr/local/bin/build-indexer"
-args = ["--fast"]
-scope = "workspace"
+command = "npx"
+args = ["-y","@modelcontextprotocol/server-everything"]
 ```
 
-## Model Configs
+## Model Routing (TOML)
 
-```yaml
-# .codex/10-models.yaml
-models:
-  default:
-    name: gpt-4o-mini
-    base_url: https://api.openai.com/v1
-    api_key_env: OPENAI_API_KEY
-  overrides:
-    title:
-      name: gpt-4o-mini
-    session_name:
-      name: gpt-4o-mini
-    compact:
-      name: gpt-4o-mini
-    meta_prompt:
-      name: gpt-4o-mini
-  profiles:
-    heavy:
-      name: gpt-4.1
-    fast:
-      name: gpt-4o-mini
-    google:
-      name: gemini-1.5-flash
-      base_url: https://generativelanguage.googleapis.com
-      api_key_env: GOOGLE_API_KEY
-    anthropic:
-      name: claude-3.7-sonnet
-      base_url: https://api.anthropic.com
-      api_key_env: ANTHROPIC_API_KEY
+```toml
+# .codex/config.toml (excerpt)
+[models.default]
+name = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+[models.overrides.title]
+name = "claude-3-5-haiku"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
+
+[models.overrides.session_name]
+name = "gpt-4o-mini"
+
+[models.overrides.compact]
+name = "gemini-1.5-flash"
+base_url = "https://generativelanguage.googleapis.com"
+api_key_env = "GOOGLE_API_KEY"
+
+[models.overrides.meta_prompt]
+name = "claude-3.7-sonnet"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
+
+[models.overrides.task_status]
+name = "gpt-4o-mini"
+
+[models.profiles.fast]
+name = "gpt-4o-mini"
+
+[models.profiles.heavy]
+name = "claude-3.7-sonnet"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
+
+[models.profiles.google]
+name = "gemini-1.5-pro"
+base_url = "https://generativelanguage.googleapis.com"
+api_key_env = "GOOGLE_API_KEY"
+
+[models.profiles.anthropic]
+name = "claude-3.7-sonnet"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
 ```
 
 ## Example Slash Commands

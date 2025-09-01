@@ -33,128 +33,134 @@ make build      # cargo build --workspace
 make install    # install codex with annex* features enabled (no separate annex bin)
 ```
 
-2) **Create minimal `.codex/` workspace** (YAML‑first):
+2) **Create minimal `.codex/` workspace** (TOML config + JSON data):
 
 ```bash
 mkdir -p .codex/{hooks,slash,tasks,todos,sessions}
 ```
 
-**`.codex/10-models.yaml`** (model routing; **source of truth**):
+**`.codex/config.toml`** (model routing; source of truth):
 
-```yaml
-models:
-  default:
-    name: gpt-4o-mini
-    base_url: https://api.openai.com/v1
-    api_key_env: OPENAI_API_KEY
+```toml
+[models.default]
+name = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
 
-  overrides:
-    title:
-      name: claude-3-5-haiku
-      base_url: https://api.anthropic.com
-      api_key_env: ANTHROPIC_API_KEY
-    session_name:
-      name: gpt-4o-mini
-    compact:
-      name: gemini-1.5-flash
-      base_url: https://generativelanguage.googleapis.com
-      api_key_env: GOOGLE_API_KEY
-    meta_prompt:
-      name: claude-3.7-sonnet
-      base_url: https://api.anthropic.com
-      api_key_env: ANTHROPIC_API_KEY
-    task_status:
-      name: gpt-4o-mini
+[models.overrides.title]
+name = "claude-3-5-haiku"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
 
-  profiles:
-    fast:      { name: gpt-4o-mini }
-    heavy:     { name: claude-3.7-sonnet, base_url: https://api.anthropic.com, api_key_env: ANTHROPIC_API_KEY }
-    google:    { name: gemini-1.5-pro, base_url: https://generativelanguage.googleapis.com, api_key_env: GOOGLE_API_KEY }
-    anthropic: { name: claude-3.7-sonnet, base_url: https://api.anthropic.com, api_key_env: ANTHROPIC_API_KEY }
+[models.overrides.session_name]
+name = "gpt-4o-mini"
+
+[models.overrides.compact]
+name = "gemini-1.5-flash"
+base_url = "https://generativelanguage.googleapis.com"
+api_key_env = "GOOGLE_API_KEY"
+
+[models.overrides.meta_prompt]
+name = "claude-3.7-sonnet"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
+
+[models.overrides.task_status]
+name = "gpt-4o-mini"
+
+[models.profiles.fast]
+name = "gpt-4o-mini"
+
+[models.profiles.heavy]
+name = "claude-3.7-sonnet"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
+
+[models.profiles.google]
+name = "gemini-1.5-pro"
+base_url = "https://generativelanguage.googleapis.com"
+api_key_env = "GOOGLE_API_KEY"
+
+[models.profiles.anthropic]
+name = "claude-3.7-sonnet"
+base_url = "https://api.anthropic.com"
+api_token_env = "ANTHROPIC_API_KEY"
 ```
 
-**`.codex/mcp.yaml`** (preferred YAML orchestration of external MCP servers):
+MCP servers live under `[mcp.servers.*]` in `.codex/config.toml`.
 
-```yaml
-mcp:
-  servers:
-    everything:
-      enabled: true
-      transport: stdio
-      command: npx
-      args: ["-y", "@modelcontextprotocol/server-everything"]
-      env: {}
-    local-http:
-      enabled: false
-      transport: tcp
-      host: 127.0.0.1
-      port: 8848
-      env: {}
+**`.codex/hooks/*.toml`** (example audit + status summarization hooks):
+
+```toml
+[[rule]]
+name = "audit-log"
+enabled = true
+deny_on_fail = false
+when = ["post_exec", "task_end"]
+
+  [[rule.actions]]
+  kind = "plugin"
+  handler = "audit_log"
+
+[[rule]]
+name = "summarize-task"
+enabled = true
+deny_on_fail = false
+when = ["task_end"]
+
+  [[rule.actions]]
+  kind = "prompt"
+  model_profile = "heavy"
+  instruction = "Generate a one-line status that explains what the task achieved and any blockers."
 ```
 
-**`.codex/hooks/audit.yaml`** (example audit + status summarization hooks):
+**`.codex/slash/*.toml`** (alias & macro; MCP mgmt in workspace scope):
 
-```yaml
-- name: audit-log
-  enabled: true
-  when: [post_exec, task_end]
-  deny_on_fail: false
-  actions:
-    - action: exec
-      cmd: bash
-      args: ["-lc", "echo \"$(date -Is) $CMD\" >> .codex/audit.log"]
+```toml
+[alias]
+todo = "/todo $ARGS"
 
-- name: summarize-task
-  enabled: true
-  when: [task_end]
-  deny_on_fail: false
-  actions:
-    - action: prompt
-      model_profile: heavy
-      instruction: |
-        Generate a one-line status that explains what the task achieved and any blockers.
+[[macro]]
+name = "quick-title"
+lines = [
+  "/config-set models.overrides.title.name gpt-4o-mini",
+  "/run title $ARGS"
+]
 ```
 
-**`.codex/slash/commands.yaml`** (alias & macro; MCP mgmt in workspace scope):
+**TaskSet spec example** — `.codex/tasks/2025-09-01/SESSION-UUID/set-01.json` (JSON):
 
-```yaml
-alias:
-  todo: "/todo $ARGS"
-
-macro:
-  quick-title:
-    - "/config-set models.overrides.title.name gpt-4o-mini"
-    - "/run title $ARGS"
-
-mcp:
-  # managed by /mcp-add|/mcp-enable|/mcp-disable (workspace scope)
-```
-
-**TaskSet spec example** — `.codex/tasks/2025-09-01/SESSION-UUID/set-01.yaml`:
-
-```yaml
-sets:
-  - set_id: set-01
-    title: Bootstrap Project
-    mode: parallel
-    tasks:
-      - id: t1
-        name: Generate Title
-        model_profile: fast
-        status_line: "titling…"
-        success_criteria: "5–10 words, action + outcome"
-        steps:
-          - type: chat
-            prompt: "Propose a concise project title."
-
-      - id: t2
-        name: Run Lints
-        model_profile: fast
-        status_line: "linting…"
-        steps:
-          - type: exec
-            cmd: "cargo"
-            args: ["clippy","--all-targets","--all-features","--","-D","warnings"]
+```json
+{
+  "sets": [
+    {
+      "set_id": "set-01",
+      "title": "Bootstrap Project",
+      "mode": "parallel",
+      "tasks": [
+        {
+          "id": "t1",
+          "name": "Generate Title",
+          "model_profile": "fast",
+          "status_line": "titling…",
+          "success_criteria": "5–10 words, action + outcome",
+          "steps": [
+            { "type": "chat", "prompt": "Propose a concise project title." }
+          ]
+        },
+        {
+          "id": "t2",
+          "name": "Run Lints",
+          "model_profile": "fast",
+          "status_line": "linting…",
+          "steps": [
+            { "type": "exec", "cmd": "cargo", "args": ["clippy","--all-targets","--all-features","--","-D","warnings"] }
+          ]
+        }
+      ]
+    }
+  ]
+}
 ```
 
 3) **Run an MCP tool and a TaskSet** (CLI surface lives in `codex`; examples):
@@ -163,11 +169,11 @@ sets:
 # Example: start an MCP server (stdio) and bridge it
 codex mcp serve --stdio
 
-# Example: connect to a child MCP server configured in .codex/mcp.yaml
+# Example: connect to a child MCP server configured in .codex/config.toml
 codex mcp connect --server everything
 
 # Example: run a TaskSet by spec path (main model updates after set completes)
-codex tasks run --file .codex/tasks/2025-09-01/SESSION-UUID/set-01.yaml
+codex tasks run --file .codex/tasks/2025-09-01/SESSION-UUID/set-01.json
 ```
 
 > **Note:** Prefer `codex` subcommands for all interactions. Transitional `codex-*` helper bins are allowed *only if explicitly requested* for bring‑up and should be folded back into `codex`.
@@ -215,35 +221,31 @@ TaskSetRunner  ⇄  HookRegistry  ⇄  SlashRegistry  ⇄  ConfigManager        
 Compactor (auto-compact focus instruction only)                                     │
    │                                                                               │
    ▼                                                                               │
-SessionLogWriter (.codex/sessions/<date>/<SESSION-UUID>/session.yaml)  ────────────┘
+SessionLogWriter (.codex/sessions/<date>/<SESSION-UUID>/{session.json,jsonl}) ─────┘
 ```
 
 ---
 
-## Configuration Model (YAML‑first)
+## Configuration Model (TOML config + JSON data)
 
-**Precedence:** `workspace‑yaml > user‑yaml > system‑yaml > layered‑toml(user/system) > runtime‑ephemeral`.
+**Precedence:** `workspace‑toml > user‑toml > system‑toml > runtime‑ephemeral`.
 
-- **Do not** let TOML overlays override workspace YAML unless explicitly requested.
-- `.codex/10-models.yaml` governs:
-  - `models.default` (primary), `overrides` (role‑based: `title`, `session_name`, `compact`, `meta_prompt`, `task_status`), and `profiles` (e.g., `fast`, `heavy`, `google`, `anthropic`).
-  - Each entry may set `name`, `base_url`, `api_key_env`, optional headers.
+- `.codex/config.toml` governs:
+  - `[models.default]` (primary), `[models.overrides.*]` (role‑based: `title`, `session_name`, `compact`, `meta_prompt`, `task_status`), and `[models.profiles.*]` (e.g., `fast`, `heavy`, `google`, `anthropic`).
+  - Each entry may set `name`, `base_url`, `api_key_env` or `api_token_env`, optional `extra_headers`.
 
-**MCP servers** should be declared in YAML (preferred). `/mcp-add` may write layered TOML toggles, but YAML remains the source of truth.
+**MCP servers** should be declared in TOML under `[mcp.servers.*]`. Slash commands can patch workspace scope.
 
 **Layout of `.codex/`**:
 
 ```
 .codex/
-  10-models.yaml        # model routing
-  20-shell.yaml         # shell policy (optional)
-  30-compact.yaml       # compaction policy (optional)
-  40-sessions.yaml      # logging policy (optional)
-  hooks/                # *.yaml hook definitions
-  slash/                # commands.yaml for aliases/macros
-  tasks/                # dated TaskSet specs
-  todos/                # TODO store(s)
-  sessions/             # session logs (append-only YAML docs)
+  config.toml        # main config (models, shell, sessions, hooks, slash, mcp)
+  hooks/             # *.toml hook definitions
+  slash/             # *.toml alias/macro/builtins
+  tasks/             # dated TaskSet specs (JSON files)
+  todos/             # JSON TODO store (path configurable)
+  sessions/          # session logs (JSON + JSONL)
 ```
 
 ---
@@ -255,7 +257,7 @@ SessionLogWriter (.codex/sessions/<date>/<SESSION-UUID>/session.yaml)  ───
 - **UI contract** (rendered by the host): square status, lane summary + task # + model label, **one‑line live status**.
 - **Main model gets updated only after the entire TaskSet completes.** (Prevents leaking mid‑state outputs.)
 
-**Spec path:** `.codex/tasks/<YYYY‑MM‑DD>/<SESSION‑UUID>/set‑XX.yaml`
+**Spec path:** `.codex/tasks/<YYYY‑MM‑DD>/<SESSION‑UUID>/set‑XX.json`
 
 **Schema (informal):**
 
@@ -304,14 +306,14 @@ sets:
 - On `TaskEnd`, run a prompt (profile `heavy`) to produce a **one‑line status** (“achievements + blockers”).
 - Append exec lines to `.codex/audit.log` (see example in Quick Start).
 
-**Location:** `.codex/hooks/*.yaml`.
+**Location:** `.codex/hooks/*.toml`.
 
 ---
 
 ## Slash Commands
 
 **Policy:** Prefer **alias** and **macro**; short, verb‑first names.  
-**Location:** `.codex/slash/commands.yaml`.
+**Location:** `.codex/slash/*.toml`.
 
 - **MCP management:** `/mcp-add`, `/mcp-enable`, `/mcp-disable` patch **workspace** scope.
 - Example macro `quick-title` provided above.
@@ -328,8 +330,8 @@ sets:
 
 ## Sessions & Privacy
 
-- **Path:** `.codex/sessions/<date>/<SESSION‑UUID>/session.yaml`
-- **Format:** append‑only YAML docs; one event per document.
+- **Path:** `.codex/sessions/<date>/<SESSION‑UUID>/session.json` and `session.jsonl`
+- **Format:** JSON (array) and JSON Lines (append). Both written by default.
 - **Redact:** patterns `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`.
 - **Auto‑purge:** respect `auto_purge_days` if configured.
 - **Observability:** use `SessionLogWriter` for chat, exec, file refs, meta. (OTEL/Langfuse optional in future.)
@@ -391,7 +393,7 @@ codex tasks --help
 - **MCP**
   - `codex mcp serve --stdio` — start an MCP server over stdio.
   - `codex mcp serve --sse --port 8765` — start an MCP server over SSE/HTTP.
-  - `codex mcp connect --server <name>` — connect to configured server (from `.codex/mcp.yaml`).
+  - `codex mcp connect --server <name>` — connect to configured server (from `.codex/config.toml`).
 - **ACP (Zed)**
   - `codex acp serve --stdio`
 - **A2A (planned)**
@@ -403,7 +405,7 @@ codex tasks --help
 
 ## Security & Data Handling
 
-- **No secrets in code or YAML.** Reference environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, etc.).
+- **No secrets in code or TOML.** Reference environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, etc.).
 - Redaction patterns are enforced in session logs.
 - Prefer least‑privilege env vars; never hardcode API keys or tokens.
 - Audit trails (e.g., `.codex/audit.log`) are append‑only; review regularly.
@@ -414,7 +416,7 @@ codex tasks --help
 
 ### 1) Add an external MCP server
 
-1. Declare server in `.codex/mcp.yaml` (stdio or TCP/SSE).
+1. Declare server in `.codex/config.toml` (stdio or TCP/SSE) under `[mcp.servers.*]`.
 2. Enable via `/mcp-enable <name>` (workspace scope).
 3. Call with a Task step:
 
@@ -483,12 +485,12 @@ sets:
 ```
 
 ```bash
-codex tasks run --file .codex/tasks/2025-09-01/SESSION-UUID/set-02.yaml
+codex tasks run --file .codex/tasks/2025-09-01/SESSION-UUID/set-02.json
 ```
 
 ### Append audit and summarize outcomes (hooks)
 
-See **Quick Start** `audit.yaml`. The `summarize-task` hook calls a **heavy** model profile to render a one‑liner per task completion.
+See **Quick Start** hook TOML. The `summarize-task` rule uses a **heavy** model profile to render a one‑liner per task completion.
 
 ---
 
@@ -510,8 +512,8 @@ See **Quick Start** `audit.yaml`. The `summarize-task` hook calls a **heavy** mo
 
 ## Migration & Compatibility
 
-- **YAML is source‑of‑truth.** Layered TOML is allowed only for user/system overlays or slash toggles.
-- Avoid hardcoding model IDs in code. Always route via `.codex/10-models.yaml` **profiles** and **overrides**.
+- **TOML is source‑of‑truth for config.** JSON/JSONL for data.
+- Avoid hardcoding model IDs in code. Always route via `[models]` profiles and overrides in `.codex/config.toml`.
 - When advancing the Codex submodule:
   - Pin the commit; document sparse checkout; include a rollback note.
   - Provide a **[SUBMODULE CHANGE]** patch + temporary shim if we need to bridge time to upstream merge.
@@ -520,8 +522,8 @@ See **Quick Start** `audit.yaml`. The `summarize-task` hook calls a **heavy** mo
 
 ## Troubleshooting
 
-- **MCP server not found:** ensure `.codex/mcp.yaml` has `enabled: true`; re‑run `/mcp-enable <name>`.
-- **No model credentials:** check env vars like `OPENAI_API_KEY`. Never store in YAML.
+- **MCP server not found:** ensure `.codex/config.toml` has `[mcp.servers.<name>] enabled = true`; re‑run `/mcp-enable <name>`.
+- **No model credentials:** check env vars like `OPENAI_API_KEY`. Never store in TOML.
 - **Hooks not firing:** confirm event names (`post_exec`, `task_end`) and that the hook file is in `.codex/hooks/`.
 - **Task never updates main model:** expected until TaskSet completes; check set mode (`parallel|sequential`), long‑running steps, and `on_error` policy.
 
@@ -531,7 +533,7 @@ See **Quick Start** `audit.yaml`. The `summarize-task` hook calls a **heavy** mo
 
 - **TaskSet** — a collection of tasks executed in `parallel` or `sequential` mode with a single committed main‑model update at the end.
 - **Hook** — a policy‑driven reaction to lifecycle events; can run prompts or shell commands and may deny on failure.
-- **Slash** — alias/macro command system, stored in YAML, driving common actions and config changes.
+- **Slash** — alias/macro command system, stored in TOML, driving common actions and config changes.
 - **Compactor** — produces **focus instruction only** at TaskEnd; the pipeline composes summaries elsewhere.
 - **SessionLogWriter** — append‑only event recorder for sessions.
 - **MCP/ACP/A2A/AGP** — protocol surfaces for tool & agent interop (see matrix).
@@ -540,7 +542,7 @@ See **Quick Start** `audit.yaml`. The `summarize-task` hook calls a **heavy** mo
 
 ## Design Invariants (Non‑Negotiable)
 
-- **YAML‑first** configuration with clear precedence and no hidden overrides.
+- **TOML‑first** configuration with clear precedence and no hidden overrides.
 - **Feature‑gated integration** into `codex`; **no separate annex binary**.
 - **Main model update only after TaskSet completion**.
 - **No secrets** in code/config; env var usage is mandatory.
