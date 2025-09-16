@@ -18,21 +18,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "agent-client-protocol"
-version = "0.3.1-alpha.1"
-source = "git+https://github.com/zed-industries/agent-client-protocol#64ec3938e7340e721ad7303f5289d3cb945584f3"
-dependencies = [
- "anyhow",
- "async-broadcast",
- "futures",
- "log",
- "parking_lot",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -68,37 +53,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "annex"
-version = "0.3.0"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "chrono",
- "crossterm 0.29.0",
- "directories",
- "futures",
- "git2",
- "globset",
- "ignore",
- "jsonschema 0.33.0",
- "notify",
- "parking_lot",
- "ratatui",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "unicode-width 0.2.0",
- "uuid",
- "walkdir",
 ]
 
 [[package]]
@@ -156,18 +110,6 @@ name = "anyhow"
 version = "1.0.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0674a1ddeecb70197781e945de4b3b8ffb61fa939a5597bcf48503737663100"
-
-[[package]]
-name = "async-broadcast"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "435a87a52755b8f27fcf321ac4f04b2802e337c8c4872923137471ec39c37532"
-dependencies = [
- "event-listener",
- "event-listener-strategy",
- "futures-core",
- "pin-project-lite",
-]
 
 [[package]]
 name = "atomic-waker"
@@ -369,6 +311,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 
 [[package]]
+name = "codex-annex"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "crossterm 0.29.0",
+ "directories",
+ "futures",
+ "git2",
+ "globset",
+ "ignore",
+ "jsonschema 0.33.0",
+ "notify",
+ "parking_lot",
+ "ratatui",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width 0.2.0",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -386,15 +358,6 @@ dependencies = [
  "rustversion",
  "ryu",
  "static_assertions",
-]
-
-[[package]]
-name = "concurrent-queue"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
-dependencies = [
- "crossbeam-utils",
 ]
 
 [[package]]
@@ -597,12 +560,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dyn-clone"
-version = "1.0.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
-
-[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -640,27 +597,6 @@ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
  "windows-sys 0.61.0",
-]
-
-[[package]]
-name = "event-listener"
-version = "5.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
-dependencies = [
- "concurrent-queue",
- "parking",
- "pin-project-lite",
-]
-
-[[package]]
-name = "event-listener-strategy"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
-dependencies = [
- "event-listener",
- "pin-project-lite",
 ]
 
 [[package]]
@@ -1760,12 +1696,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
-name = "parking"
-version = "2.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
-
-[[package]]
 name = "parking_lot"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2085,31 +2015,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "schemars"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82d20c4491bc164fa2f6c5d44565947a52ad80b9505d8e36f8d54c27c739fcd0"
-dependencies = [
- "dyn-clone",
- "ref-cast",
- "schemars_derive",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "schemars_derive"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33d020396d1d138dc19f1165df7545479dcd58d93810dc5d646a16e55abefa80"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde_derive_internals",
- "syn",
-]
-
-[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2139,17 +2044,6 @@ name = "serde_derive"
 version = "1.0.224"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87ff78ab5e8561c9a675bfc1785cb07ae721f0ee53329a595cefd8c04c2ac4e0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "serde_derive_internals"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
 dependencies = [
  "proc-macro2",
  "quote",
