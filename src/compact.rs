@@ -95,7 +95,7 @@ fn git_changed_files(repo: &Repository, root: &Path) -> BTreeSet<PathBuf> {
     // Index (staged)
     if let Ok(idx) = repo.index() {
         for e in idx.iter() {
-            if let Some(path) = std::str::from_utf8(e.path).ok() {
+            if let Some(path) = std::str::from_utf8(&e.path).ok() {
                 out.insert(root.join(path));
             }
         }

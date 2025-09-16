@@ -53,7 +53,6 @@ pub struct HookRule {
 }
 fn default_true() -> bool { true }
 
-#[derive(Default)]
 pub struct HookRegistry {
     rules: Vec<HookRule>,
     depth: Arc<Mutex<usize>>,

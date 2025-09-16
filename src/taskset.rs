@@ -139,7 +139,7 @@ impl<'a> TaskSetRunner<'a> {
                 TaskStep::Exec { cmd, args } => {
                     let (status, out_preview) = (self.do_exec)(cmd, args).await?;
                     let _ = self.ui_tx.send(UiEvent::TaskProgress { set_id: set.set_id.clone(), task_id: t.id.clone(), line: format!("exec {} -> {}", cmd, status) });
-                    self.hooks.emit(&self.ctx, &HookEvent::PostExec{ cmd: cmd.clone(), argv: args.clone(), status }).await.ok();
+                    self.hooks.emit(&self.ctx, &HookEvent::PostExec{ cmd: cmd.clone(), argv: args.clone(), status, stdout_len: out_preview.len(), stderr_len: 0 }).await.ok();
                     if status != 0 { ok = false; }
                 }
                 TaskStep::McpCall { server, method, payload } => {

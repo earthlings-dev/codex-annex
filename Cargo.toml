@@ -19,6 +19,19 @@ include = [
   "LICENSE",
   "THIRD_PARTY_NOTICES.md"
 ]
+# Fallback exclusions (in case include is ignored by tooling)
+exclude = [
+  "/external/**",
+  "/xtask/**",
+  "/.github/**",
+  "/target/**",
+  "/schemas/**",
+  "/scripts/**",
+  "/.gitmodules",
+  "/Makefile",
+  "/.codex/**",
+  "/Cargo.toml.orig"
+]
 
 [workspace]
 members = [".", "xtask"]
@@ -50,6 +63,7 @@ uuid = { version = ">=1.18.0", features = ["v4"] }
 chrono = { version = ">=0.4.41", default-features = false, features = ["clock"] }
 ratatui = ">=0.29"
 crossterm = ">=0.29"
+async-trait = "0.1"
 
 toml = ">=0.9.6"
 tracing = ">=0.1"

@@ -278,7 +278,7 @@ impl ConfigManager {
             system_path, user_path, workspace_path,
             runtime_overlay: Arc::new(RwLock::new(Config::default())),
         };
-        let mut me = cm;
+        let me = cm;
         me.reload_all()?;
         me.start_watch()?;
         Ok(me)
@@ -290,7 +290,7 @@ impl ConfigManager {
         Some(p.0)
     }
 
-    pub fn reload_all(&mut self) -> Result<()> {
+    pub fn reload_all(&self) -> Result<()> {
         let mut merged = Config::default();
         if let Some(sys) = Self::read_file(&self.system_path) { merge(&mut merged, &sys); }
         if let Some(usr) = Self::read_file(&self.user_path) { merge(&mut merged, &usr); }
