@@ -13,30 +13,31 @@ members = [".", "xtask"]
 default = []
 
 [dependencies]
-anyhow = "1.0.99"
-thiserror = "2.0.16"
-tokio = { version = "1.38", features = ["rt-multi-thread","macros","fs","io-util","process","signal","sync","net"] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_derive = "1.0.219"
-serde_json = "1.0.143"
-directories = "6.0.0"
-notify = "8.2.0"
-parking_lot = "0.12.4"
-futures = "0.3.31"
-regex = "1.11.1"
-globset = "0.4.16"
-ignore = "0.4.23"
-walkdir = "2.5.0"
-git2 = "0.20.2"
-uuid = { version = "1.18.0", features = ["v4"] }
-chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
-ratatui = "0.27"
-crossterm = "0.29"
+anyhow = ">=1.0.99"
+thiserror = ">=2.0.16"
+tokio = { version = ">=1.38", features = ["rt-multi-thread","macros","fs","io-util","process","signal","sync","net"] }
+serde = { version = ">=1.0.219", features = ["derive"] }
+serde_derive = ">=1.0.219"
+serde_json = ">=1.0.143"
+directories = ">=6.0.0"
+notify = ">=8.2.0"
+parking_lot = ">=0.12.4"
+futures = ">=0.3.31"
+regex = ">=1.11.1"
+globset = ">=0.4.16"
+ignore = ">=0.4.23"
+walkdir = ">=2.5.0"
+git2 = ">=0.20.2"
+uuid = { version = ">=1.18.0", features = ["v4"] }
+chrono = { version = ">=0.4.41", default-features = false, features = ["clock"] }
+ratatui = ">=0.29"
+crossterm = ">=0.29"
 
-toml = "0.8"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-jsonschema = "0.17"
+toml = ">=0.9.6"
+tracing = ">=0.1"
+tracing-subscriber = { version = ">=0.3", features = ["fmt", "env-filter"] }
+jsonschema = ">=0.33.0"
+unicode-width = ">=0.2.0"
 
 # ACP (Agent Client Protocol) -- pin to a commit to avoid drift.
 # You can update the rev whenever you want to track spec changes.
