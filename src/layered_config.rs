@@ -302,7 +302,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    fn start_watch(&mut self) -> Result<()> {
+    fn start_watch(&self) -> Result<()> {
         let system = self.system_path.clone();
         let user = self.user_path.clone();
         let workspace = self.workspace_path.clone();

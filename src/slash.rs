@@ -137,9 +137,15 @@ impl SlashRegistry {
                             .iter().filter_map(|x| x.as_str().map(|s| self.workspace_root.join(s))).collect();
                         let tags: Vec<String> = v.get("tags").and_then(|x| x.as_array()).unwrap_or(&vec![])
                             .iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
-                        let it = store.add(title.to_string(), desc, files, tags);
-                        store.save(&path)?;
-                        Ok(format!("todo added: {} ({})", it.title, it.id))
+                        // Capture data we need without holding a borrow across save()
+                        {
+                            let it = store.add(title.to_string(), desc, files, tags);
+                            let title_owned = it.title.clone();
+                            let id_owned = it.id.clone();
+                            drop(it);
+                            store.save(&path)?;
+                            return Ok(format!("todo added: {} ({})", title_owned, id_owned));
+                        }
                     }
                     "list" => {
                         let mut s = String::new();
