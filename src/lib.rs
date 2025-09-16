@@ -7,6 +7,7 @@ pub mod slash;              // TOML-defined slash commands/macros/builtins
 pub mod taskset;            // Task Sets: parallel/seq, live status, per-task model
 pub mod todo;               // TODO store in JSON
 pub mod compact;            // manual/auto compaction
+#[cfg(feature = "acp")]
 pub mod acp_server;         // ACP server skeleton bridging to codex task/todo/hooks
 
 // re-exports

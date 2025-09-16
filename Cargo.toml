@@ -1,17 +1,34 @@
 # annex/Cargo.toml
 
 [package]
-name = "annex"
+name = "codex-annex"
 version = "0.3.0"
 edition = "2024"
 rust-version = "1.89"
 license = "AGPL-3.0-or-later"
+description = "Feature-gated agent extensions for codex-rs: TaskSets, hooks, slash commands, MCP bridge, session logs, compactor."
+readme = "README.md"
+repository = "https://github.com/earthlings-dev/codex-annex"
+documentation = "https://docs.rs/codex-annex"
+keywords = ["agents","mcp","hooks","tasks","codex"]
+categories = ["development-tools","command-line-utilities"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE",
+  "THIRD_PARTY_NOTICES.md"
+]
 
 [workspace]
 members = [".", "xtask"]
 
 [features]
 default = []
+# ACP is scaffolded and off by default. Enabling it requires an external crate
+# that is not published on crates.io yet, so we do not declare a dependency
+# here to keep this crate publishable.
+acp = []
 
 [dependencies]
 anyhow = ">=1.0.99"
@@ -40,9 +57,6 @@ tracing-subscriber = { version = ">=0.3", features = ["fmt", "env-filter"] }
 jsonschema = ">=0.33.0"
 unicode-width = ">=0.2.0"
 
-# ACP (Agent Client Protocol) -- pin to a commit to avoid drift.
-# You can update the rev whenever you want to track spec changes.
-[dependencies.agent-client-protocol]
-git = "https://github.com/zed-industries/agent-client-protocol"
-# branch = "main"         # or a tag if they add one
-# rev = "<insert-commit-sha>"
+# ACP (Agent Client Protocol) dependency intentionally omitted for publishability.
+# When the ACP crate is published to crates.io, add it as an optional
+# dependency and map it to the `acp` feature.
