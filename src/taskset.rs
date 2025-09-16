@@ -1,10 +1,10 @@
 // annex/src/taskset.rs
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures::{future::join_all};
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use crate::{
   layered_config::{ConfigManager, ModelRole},

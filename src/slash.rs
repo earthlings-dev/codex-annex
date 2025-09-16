@@ -142,7 +142,7 @@ impl SlashRegistry {
                             let it = store.add(title.to_string(), desc, files, tags);
                             let title_owned = it.title.clone();
                             let id_owned = it.id.clone();
-                            drop(it);
+                            let _ = it;
                             store.save(&path)?;
                             return Ok(format!("todo added: {} ({})", title_owned, id_owned));
                         }

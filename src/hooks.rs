@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::{Path, PathBuf}, sync::Arc};
+use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
 use tokio::process::Command;
 
 use crate::layered_config::{ConfigManager, ModelRole};

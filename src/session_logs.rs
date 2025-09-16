@@ -28,6 +28,7 @@ struct OutEvent {
 pub struct SessionLogWriter {
     root_dir: PathBuf,
     _session_id: String,
+    #[allow(dead_code)]
     day_dir: PathBuf,
     json_file: PathBuf,
     jsonl_file: PathBuf,
