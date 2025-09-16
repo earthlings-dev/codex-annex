@@ -2,7 +2,7 @@
 
 [package]
 name = "codex-annex"
-version = "0.3.0"
+version = "0.0.1"
 edition = "2024"
 rust-version = "1.89"
 license = "AGPL-3.0-or-later"
