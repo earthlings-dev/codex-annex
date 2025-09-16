@@ -5,7 +5,7 @@ name = "annex"
 version = "0.3.0"
 edition = "2024"
 rust-version = "1.89"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-or-later"
 
 [workspace]
 members = [".", "xtask"]
