@@ -74,3 +74,6 @@ unicode-width = ">=0.2.0"
 # ACP (Agent Client Protocol) dependency intentionally omitted for publishability.
 # When the ACP crate is published to crates.io, add it as an optional
 # dependency and map it to the `acp` feature.
+
+[dev-dependencies]
+tempfile = "3"

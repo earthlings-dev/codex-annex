@@ -2,10 +2,15 @@
 
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
-use notify::{recommended_watcher, Event, RecursiveMode, Watcher};
+use notify::{Event, RecursiveMode, Watcher, recommended_watcher};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::{Path, PathBuf}, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::sync::broadcast;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -29,8 +34,17 @@ pub struct Config {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ApprovalMode { OnRequest, OnFailure, UnlessTrusted, Never }
-impl Default for ApprovalMode { fn default() -> Self { Self::OnRequest } }
+pub enum ApprovalMode {
+    OnRequest,
+    OnFailure,
+    UnlessTrusted,
+    Never,
+}
+impl Default for ApprovalMode {
+    fn default() -> Self {
+        Self::OnRequest
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -54,12 +68,12 @@ pub struct ModelsConfig {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct ModelTarget {
-    pub name: String,                        // e.g. "gpt-4o-mini", "gemini-1.5-pro"
-    pub base_url: Option<String>,            // e.g. "https://api.openai.com/v1"
+    pub name: String,             // e.g. "gpt-4o-mini", "gemini-1.5-pro"
+    pub base_url: Option<String>, // e.g. "https://api.openai.com/v1"
     /// Name of env var carrying an API key (if provider uses a key)
-    pub api_key_env: Option<String>,         // e.g. OPENAI_API_KEY
+    pub api_key_env: Option<String>, // e.g. OPENAI_API_KEY
     /// Name of env var carrying an API token (if provider uses bearer tokens)
-    pub api_token_env: Option<String>,       // e.g. ANTHROPIC_API_KEY or custom token
+    pub api_token_env: Option<String>, // e.g. ANTHROPIC_API_KEY or custom token
     pub extra_headers: BTreeMap<String, String>,
 }
 
@@ -76,7 +90,7 @@ pub enum ModelRole {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SandboxConfig {
-    pub mode: Option<String>,              // "danger_full_access" | "read_only" | "workspace_write"
+    pub mode: Option<String>, // "danger_full_access" | "read_only" | "workspace_write"
     pub network_access: Option<bool>,
     pub writable_roots: Vec<PathBuf>,
 }
@@ -85,10 +99,10 @@ pub struct SandboxConfig {
 #[serde(default)]
 pub struct ShellConfig {
     pub approval: ApprovalMode,
-    pub allowlist_roots: Vec<String>,      // e.g., ["git","rg","ls","cat","cargo"]
+    pub allowlist_roots: Vec<String>, // e.g., ["git","rg","ls","cat","cargo"]
     pub denylist_roots: Vec<String>,
-    pub environment_inherit: Option<String>,  // "none" | "core" | "all"
-    pub env_exclude_patterns: Vec<String>,    // ["*KEY*","*TOKEN*"]
+    pub environment_inherit: Option<String>, // "none" | "core" | "all"
+    pub env_exclude_patterns: Vec<String>,   // ["*KEY*","*TOKEN*"]
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -109,7 +123,7 @@ pub struct HistoryConfig {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct TodoConfig {
-    pub path: Option<PathBuf>,   // defaults to .codex/todo.json
+    pub path: Option<PathBuf>, // defaults to .codex/todo.json
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -122,8 +136,8 @@ pub struct CompactConfig {
     /// Trigger auto-compact at task end.
     pub auto_on_task_end: bool,
     /// Heuristic thresholds.
-    pub max_context_chars: usize,   // soft target for summary input assembly
-    pub max_files: usize,           // cap included file list
+    pub max_context_chars: usize, // soft target for summary input assembly
+    pub max_files: usize,                   // cap included file list
     pub include_globs_default: Vec<String>, // baseline patterns for manual/auto
 }
 impl Default for CompactConfig {
@@ -134,7 +148,7 @@ impl Default for CompactConfig {
             auto_on_task_end: true,
             max_context_chars: 40_000,
             max_files: 24,
-            include_globs_default: vec!["**/*.rs".into(),"**/*.md".into(),"**/*.toml".into()],
+            include_globs_default: vec!["**/*.rs".into(), "**/*.md".into(), "**/*.toml".into()],
         }
     }
 }
@@ -142,7 +156,7 @@ impl Default for CompactConfig {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SessionsConfig {
-    pub dir: Option<PathBuf>,              // default: ~/.local/share/codex/sessions
+    pub dir: Option<PathBuf>, // default: ~/.local/share/codex/sessions
     pub auto_purge_days: Option<u32>,
     pub resume_on_launch: bool,
     /// "json" | "jsonl" | "both" (default)
@@ -174,42 +188,70 @@ pub struct McpConfig {
 #[serde(default)]
 pub struct McpServer {
     pub enabled: bool,
-    pub transport: String,                 // "stdio" | "tcp"
-    pub command: Option<PathBuf>,          // for stdio
+    pub transport: String,        // "stdio" | "tcp"
+    pub command: Option<PathBuf>, // for stdio
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
-    pub host: Option<String>,              // for tcp
+    pub host: Option<String>, // for tcp
     pub port: Option<u16>,
-    pub scope: Option<String>,             // "system" | "user" | "workspace" (for UI)
+    pub scope: Option<String>, // "system" | "user" | "workspace" (for UI)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Scope { System, User, Workspace, Runtime }
+pub enum Scope {
+    System,
+    User,
+    Workspace,
+    Runtime,
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PartialConfig(pub Config);
 
 fn merge(a: &mut Config, b: &Config) {
-    let overlay = |dst: &mut Option<String>, src: &Option<String>| { if src.is_some() { *dst = src.clone(); } };
+    let overlay = |dst: &mut Option<String>, src: &Option<String>| {
+        if src.is_some() {
+            *dst = src.clone();
+        }
+    };
     overlay(&mut a.model.name, &b.model.name);
     overlay(&mut a.model.reasoning_effort, &b.model.reasoning_effort);
     overlay(&mut a.model.reasoning_summary, &b.model.reasoning_summary);
 
     // models routing
-    if !b.models.default.name.is_empty() { a.models.default = b.models.default.clone(); }
-    for (k, v) in &b.models.overrides { a.models.overrides.insert(k.clone(), v.clone()); }
-    for (k, v) in &b.models.profiles { a.models.profiles.insert(k.clone(), v.clone()); }
+    if !b.models.default.name.is_empty() {
+        a.models.default = b.models.default.clone();
+    }
+    for (k, v) in &b.models.overrides {
+        a.models.overrides.insert(k.clone(), v.clone());
+    }
+    for (k, v) in &b.models.profiles {
+        a.models.profiles.insert(k.clone(), v.clone());
+    }
 
     overlay(&mut a.sandbox.mode, &b.sandbox.mode);
-    if let Some(v) = b.sandbox.network_access { a.sandbox.network_access = Some(v); }
-    if !b.sandbox.writable_roots.is_empty() { a.sandbox.writable_roots = b.sandbox.writable_roots.clone(); }
+    if let Some(v) = b.sandbox.network_access {
+        a.sandbox.network_access = Some(v);
+    }
+    if !b.sandbox.writable_roots.is_empty() {
+        a.sandbox.writable_roots = b.sandbox.writable_roots.clone();
+    }
 
     a.shell.approval = b.shell.approval.clone();
-    if !b.shell.allowlist_roots.is_empty() { a.shell.allowlist_roots = b.shell.allowlist_roots.clone(); }
-    if !b.shell.denylist_roots.is_empty() { a.shell.denylist_roots = b.shell.denylist_roots.clone(); }
-    overlay(&mut a.shell.environment_inherit, &b.shell.environment_inherit);
-    if !b.shell.env_exclude_patterns.is_empty() { a.shell.env_exclude_patterns = b.shell.env_exclude_patterns.clone(); }
+    if !b.shell.allowlist_roots.is_empty() {
+        a.shell.allowlist_roots = b.shell.allowlist_roots.clone();
+    }
+    if !b.shell.denylist_roots.is_empty() {
+        a.shell.denylist_roots = b.shell.denylist_roots.clone();
+    }
+    overlay(
+        &mut a.shell.environment_inherit,
+        &b.shell.environment_inherit,
+    );
+    if !b.shell.env_exclude_patterns.is_empty() {
+        a.shell.env_exclude_patterns = b.shell.env_exclude_patterns.clone();
+    }
 
     a.ui.command_palette |= b.ui.command_palette;
     a.ui.status_bar |= b.ui.status_bar;
@@ -218,31 +260,53 @@ fn merge(a: &mut Config, b: &Config) {
 
     overlay(&mut a.history.persist, &b.history.persist);
 
-    if b.todo.path.is_some() { a.todo.path = b.todo.path.clone(); }
+    if b.todo.path.is_some() {
+        a.todo.path = b.todo.path.clone();
+    }
 
     // compact
     a.compact.auto_enable |= b.compact.auto_enable;
-    if b.compact.auto_min_interval_secs != 0 { a.compact.auto_min_interval_secs = b.compact.auto_min_interval_secs; }
+    if b.compact.auto_min_interval_secs != 0 {
+        a.compact.auto_min_interval_secs = b.compact.auto_min_interval_secs;
+    }
     a.compact.auto_on_task_end |= b.compact.auto_on_task_end;
-    if b.compact.max_context_chars != 0 { a.compact.max_context_chars = b.compact.max_context_chars; }
-    if b.compact.max_files != 0 { a.compact.max_files = b.compact.max_files; }
-    if !b.compact.include_globs_default.is_empty() { a.compact.include_globs_default = b.compact.include_globs_default.clone(); }
+    if b.compact.max_context_chars != 0 {
+        a.compact.max_context_chars = b.compact.max_context_chars;
+    }
+    if b.compact.max_files != 0 {
+        a.compact.max_files = b.compact.max_files;
+    }
+    if !b.compact.include_globs_default.is_empty() {
+        a.compact.include_globs_default = b.compact.include_globs_default.clone();
+    }
 
     // sessions
-    if b.sessions.dir.is_some() { a.sessions.dir = b.sessions.dir.clone(); }
-    if b.sessions.auto_purge_days.is_some() { a.sessions.auto_purge_days = b.sessions.auto_purge_days; }
+    if b.sessions.dir.is_some() {
+        a.sessions.dir = b.sessions.dir.clone();
+    }
+    if b.sessions.auto_purge_days.is_some() {
+        a.sessions.auto_purge_days = b.sessions.auto_purge_days;
+    }
     a.sessions.resume_on_launch |= b.sessions.resume_on_launch;
     overlay(&mut a.sessions.write_mode, &b.sessions.write_mode);
 
     // hooks
-    if b.hooks.recursion_limit.is_some() { a.hooks.recursion_limit = b.hooks.recursion_limit; }
-    if !b.hooks.dirs.is_empty() { a.hooks.dirs = b.hooks.dirs.clone(); }
+    if b.hooks.recursion_limit.is_some() {
+        a.hooks.recursion_limit = b.hooks.recursion_limit;
+    }
+    if !b.hooks.dirs.is_empty() {
+        a.hooks.dirs = b.hooks.dirs.clone();
+    }
 
     // slash
-    if !b.slash.dirs.is_empty() { a.slash.dirs = b.slash.dirs.clone(); }
+    if !b.slash.dirs.is_empty() {
+        a.slash.dirs = b.slash.dirs.clone();
+    }
 
     // MCP servers
-    for (k, v) in &b.mcp.servers { a.mcp.servers.insert(k.clone(), v.clone()); }
+    for (k, v) in &b.mcp.servers {
+        a.mcp.servers.insert(k.clone(), v.clone());
+    }
 }
 
 fn config_paths(workspace_root: &Path) -> Result<(PathBuf, PathBuf, PathBuf)> {
@@ -275,13 +339,34 @@ impl ConfigManager {
             inner: Arc::new(RwLock::new(Config::default())),
             tx: broadcast::channel(64).0,
             _watcher: Arc::new(RwLock::new(None)),
-            system_path, user_path, workspace_path,
+            system_path,
+            user_path,
+            workspace_path,
             runtime_overlay: Arc::new(RwLock::new(Config::default())),
         };
         let me = cm;
         me.reload_all()?;
         me.start_watch()?;
         Ok(me)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_paths(
+        system_path: PathBuf,
+        user_path: PathBuf,
+        workspace_path: PathBuf,
+    ) -> Result<Self> {
+        let cm = Self {
+            inner: Arc::new(RwLock::new(Config::default())),
+            tx: broadcast::channel(64).0,
+            _watcher: Arc::new(RwLock::new(None)),
+            system_path,
+            user_path,
+            workspace_path,
+            runtime_overlay: Arc::new(RwLock::new(Config::default())),
+        };
+        cm.reload_all()?;
+        Ok(cm)
     }
 
     fn read_file(path: &Path) -> Option<Config> {
@@ -292,9 +377,15 @@ impl ConfigManager {
 
     pub fn reload_all(&self) -> Result<()> {
         let mut merged = Config::default();
-        if let Some(sys) = Self::read_file(&self.system_path) { merge(&mut merged, &sys); }
-        if let Some(usr) = Self::read_file(&self.user_path) { merge(&mut merged, &usr); }
-        if let Some(ws)  = Self::read_file(&self.workspace_path) { merge(&mut merged, &ws); }
+        if let Some(sys) = Self::read_file(&self.system_path) {
+            merge(&mut merged, &sys);
+        }
+        if let Some(usr) = Self::read_file(&self.user_path) {
+            merge(&mut merged, &usr);
+        }
+        if let Some(ws) = Self::read_file(&self.workspace_path) {
+            merge(&mut merged, &ws);
+        }
         let rt = self.runtime_overlay.read().clone();
         merge(&mut merged, &rt);
         *self.inner.write() = merged.clone();
@@ -311,25 +402,39 @@ impl ConfigManager {
         let runtime_overlay = self.runtime_overlay.clone();
 
         let mut watcher = recommended_watcher(move |res: Result<Event, _>| {
-            if res.is_err() { return; }
+            if res.is_err() {
+                return;
+            }
             let mut merged = Config::default();
-            if let Some(sys) = ConfigManager::read_file(&system) { merge(&mut merged, &sys); }
-            if let Some(usr) = ConfigManager::read_file(&user) { merge(&mut merged, &usr); }
-            if let Some(ws)  = ConfigManager::read_file(&workspace) { merge(&mut merged, &ws); }
+            if let Some(sys) = ConfigManager::read_file(&system) {
+                merge(&mut merged, &sys);
+            }
+            if let Some(usr) = ConfigManager::read_file(&user) {
+                merge(&mut merged, &usr);
+            }
+            if let Some(ws) = ConfigManager::read_file(&workspace) {
+                merge(&mut merged, &ws);
+            }
             let rt = runtime_overlay.read().clone();
             merge(&mut merged, &rt);
             *inner.write() = merged.clone();
             let _ = tx.send(merged);
         })?;
         for p in [&self.system_path, &self.user_path, &self.workspace_path] {
-            if let Some(dir) = p.parent() { watcher.watch(dir, RecursiveMode::NonRecursive)?; }
+            if let Some(dir) = p.parent() {
+                watcher.watch(dir, RecursiveMode::NonRecursive)?;
+            }
         }
         *self._watcher.write() = Some(watcher);
         Ok(())
     }
 
-    pub fn get(&self) -> Config { self.inner.read().clone() }
-    pub fn subscribe(&self) -> broadcast::Receiver<Config> { self.tx.subscribe() }
+    pub fn get(&self) -> Config {
+        self.inner.read().clone()
+    }
+    pub fn subscribe(&self) -> broadcast::Receiver<Config> {
+        self.tx.subscribe()
+    }
 
     pub fn apply_runtime_overlay(&self, patch: Config) -> Result<()> {
         {
@@ -342,12 +447,14 @@ impl ConfigManager {
     pub fn write_patch(&self, scope: Scope, patch: &Config) -> Result<()> {
         use std::io::Write;
         let path = match scope {
-            Scope::System   => &self.system_path,
-            Scope::User     => &self.user_path,
-            Scope::Workspace=> &self.workspace_path,
-            Scope::Runtime  => anyhow::bail!("Runtime scope is ephemeral; cannot persist"),
+            Scope::System => &self.system_path,
+            Scope::User => &self.user_path,
+            Scope::Workspace => &self.workspace_path,
+            Scope::Runtime => anyhow::bail!("Runtime scope is ephemeral; cannot persist"),
         };
-        if let Some(dir) = path.parent() { fs::create_dir_all(dir)?; }
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir)?;
+        }
         let current = Self::read_file(path).unwrap_or_default();
         let mut merged = current.clone();
         merge(&mut merged, patch);
@@ -369,7 +476,9 @@ impl ConfigManager {
             ModelRole::TaskStatus => Some("task_status"),
         };
         if let Some(k) = key {
-            if let Some(t) = cfg.models.overrides.get(k) { return t.clone(); }
+            if let Some(t) = cfg.models.overrides.get(k) {
+                return t.clone();
+            }
         }
         cfg.models.default.clone()
     }
@@ -377,8 +486,14 @@ impl ConfigManager {
     /// Helper: resolve API credentials from environment for a target.
     /// Returns (api_key, api_token) as discovered (both optional).
     pub fn resolve_credentials(&self, target: &ModelTarget) -> (Option<String>, Option<String>) {
-        let key = target.api_key_env.as_ref().and_then(|k| std::env::var(k).ok());
-        let tok = target.api_token_env.as_ref().and_then(|k| std::env::var(k).ok());
+        let key = target
+            .api_key_env
+            .as_ref()
+            .and_then(|k| std::env::var(k).ok());
+        let tok = target
+            .api_token_env
+            .as_ref()
+            .and_then(|k| std::env::var(k).ok());
         (key, tok)
     }
 }
