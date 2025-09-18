@@ -1,13 +1,13 @@
 // annex/src/slash.rs — directory TOML files with alias/macro/builtins
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
 
 use crate::{
-    layered_config::{Config, ConfigManager, Scope},
     compact::Compactor,
-    todo::{TodoStore, TodoStatus},
+    layered_config::{Config, ConfigManager, Scope},
+    todo::{TodoStatus, TodoStore},
 };
 
 #[derive(Clone)]
@@ -30,27 +30,46 @@ struct SlashTomlFile {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-struct SlashMacro { name: String, lines: Vec<String> }
+struct SlashMacro {
+    name: String,
+    lines: Vec<String>,
+}
 
 impl SlashRegistry {
-    pub fn load_from_dirs_with_workspace(cfg: Arc<ConfigManager>, workspace_root: PathBuf, dirs: &[PathBuf]) -> Result<Self> {
+    pub fn load_from_dirs_with_workspace(
+        cfg: Arc<ConfigManager>,
+        workspace_root: PathBuf,
+        dirs: &[PathBuf],
+    ) -> Result<Self> {
         let mut aliases = BTreeMap::new();
         let mut macros: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut builtins: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
         for d in dirs {
-            if !d.exists() { continue; }
+            if !d.exists() {
+                continue;
+            }
             for e in fs::read_dir(d)? {
                 let p = e?.path();
-                if p.extension().is_some_and(|x| x=="toml") {
+                if p.extension().is_some_and(|x| x == "toml") {
                     let text = fs::read_to_string(&p)?;
                     let f: SlashTomlFile = toml::from_str(&text)?;
                     aliases.extend(f.alias);
-                    for m in f.macros { macros.insert(m.name, m.lines); }
-                    for (k, v) in f.builtin { builtins.insert(k, v); }
+                    for m in f.macros {
+                        macros.insert(m.name, m.lines);
+                    }
+                    for (k, v) in f.builtin {
+                        builtins.insert(k, v);
+                    }
                 }
             }
         }
-        Ok(Self { aliases, macros, builtins, cfg, workspace_root })
+        Ok(Self {
+            aliases,
+            macros,
+            builtins,
+            cfg,
+            workspace_root,
+        })
     }
 
     // Backwards-compatible helper: default workspace is current dir
@@ -60,8 +79,13 @@ impl SlashRegistry {
     }
 
     pub async fn dispatch(&self, input: &str) -> Result<String> {
-        if !input.starts_with('/') { return Err(anyhow!("not a slash command")); }
-        let (name, rest) = input[1..].split_once(' ').map(|(a,b)| (a,b)).unwrap_or((&input[1..], ""));
+        if !input.starts_with('/') {
+            return Err(anyhow!("not a slash command"));
+        }
+        let (name, rest) = input[1..]
+            .split_once(' ')
+            .map(|(a, b)| (a, b))
+            .unwrap_or((&input[1..], ""));
         if let Some(expands) = self.aliases.get(name) {
             return Ok(expands.replace("$ARGS", rest));
         }
@@ -74,19 +98,29 @@ impl SlashRegistry {
         Err(anyhow!("unknown slash: {}", name))
     }
 
-    async fn dispatch_builtin(&self, name: &str, argstr: &str, args: &BTreeMap<String, String>) -> Result<String> {
+    async fn dispatch_builtin(
+        &self,
+        name: &str,
+        argstr: &str,
+        args: &BTreeMap<String, String>,
+    ) -> Result<String> {
         match name {
             "config-set" => {
                 // expects: path value
                 let parts: Vec<&str> = argstr.split_whitespace().collect();
-                if parts.len() < 2 { return Err(anyhow!("usage: /config-set <path> <value>")); }
-                let path = parts[0]; let value = parts[1..].join(" ");
+                if parts.len() < 2 {
+                    return Err(anyhow!("usage: /config-set <path> <value>"));
+                }
+                let path = parts[0];
+                let value = parts[1..].join(" ");
                 let mut patch = Config::default();
                 match path {
                     "model.name" => patch.model.name = Some(value),
                     "history.persist" => patch.history.persist = Some(value),
                     "sandbox.mode" => patch.sandbox.mode = Some(value),
-                    "sandbox.network_access" => patch.sandbox.network_access = Some(value.parse::<bool>()?),
+                    "sandbox.network_access" => {
+                        patch.sandbox.network_access = Some(value.parse::<bool>()?)
+                    }
                     _ => return Err(anyhow!("unsupported path: {}", path)),
                 }
                 self.cfg.apply_runtime_overlay(patch)?;
@@ -94,7 +128,9 @@ impl SlashRegistry {
             }
             "allow" => {
                 let root = argstr.trim();
-                if root.is_empty() { return Err(anyhow!("usage: /allow <root-binary>")); }
+                if root.is_empty() {
+                    return Err(anyhow!("usage: /allow <root-binary>"));
+                }
                 let mut patch = Config::default();
                 patch.shell.allowlist_roots = vec![root.to_string()];
                 self.cfg.write_patch(Scope::Workspace, &patch)?;
@@ -103,20 +139,28 @@ impl SlashRegistry {
             "mcp-add" => {
                 // JSON: {"name":"X","stdio":{...}} or {"name":"X","tcp":{...}}
                 let v: serde_json::Value = serde_json::from_str(argstr)?;
-                let name = v.get("name").and_then(|x| x.as_str()).ok_or_else(|| anyhow!("missing name"))?;
+                let name = v
+                    .get("name")
+                    .and_then(|x| x.as_str())
+                    .ok_or_else(|| anyhow!("missing name"))?;
                 let mut m = crate::layered_config::McpServer::default();
                 m.enabled = true;
                 if let Some(stdio) = v.get("stdio") {
                     m.transport = "stdio".into();
                     m.command = stdio.get("cmd").and_then(|x| x.as_str()).map(|s| s.into());
                     if let Some(a) = stdio.get("args").and_then(|x| x.as_array()) {
-                        m.args = a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
+                        m.args = a
+                            .iter()
+                            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                            .collect();
                     }
                 } else if let Some(tcp) = v.get("tcp") {
                     m.transport = "tcp".into();
                     m.host = tcp.get("host").and_then(|x| x.as_str()).map(|s| s.into());
                     m.port = tcp.get("port").and_then(|x| x.as_u64()).map(|n| n as u16);
-                } else { return Err(anyhow!("expect stdio or tcp")); }
+                } else {
+                    return Err(anyhow!("expect stdio or tcp"));
+                }
                 let mut patch = Config::default();
                 patch.mcp.servers.insert(name.into(), m);
                 self.cfg.write_patch(Scope::Workspace, &patch)?;
@@ -125,18 +169,47 @@ impl SlashRegistry {
             "todo" => {
                 // /todo add {json} | list | done <id> | rm <id>
                 let cfg = self.cfg.get();
-                let path = cfg.todo.path.clone().unwrap_or(self.workspace_root.join(".codex").join("todo.json"));
+                let path = cfg
+                    .todo
+                    .path
+                    .clone()
+                    .unwrap_or(self.workspace_root.join(".codex").join("todo.json"));
                 let mut store = TodoStore::load(&path)?;
-                let parts: Vec<&str> = argstr.split_whitespace().collect();
-                match parts.get(0).copied().unwrap_or("") {
+                let trimmed = argstr.trim_start();
+                let (cmd, rest) = if let Some(idx) = trimmed.find(char::is_whitespace) {
+                    trimmed.split_at(idx)
+                } else {
+                    (trimmed, "")
+                };
+                match cmd {
                     "add" => {
-                        let v: serde_json::Value = serde_json::from_str(parts[1..].join(" ").trim())?;
-                        let title = v.get("title").and_then(|x| x.as_str()).ok_or_else(|| anyhow!("title required"))?;
-                        let desc = v.get("description").and_then(|x| x.as_str()).map(|s| s.to_string());
-                        let files: Vec<PathBuf> = v.get("files").and_then(|x| x.as_array()).unwrap_or(&vec![])
-                            .iter().filter_map(|x| x.as_str().map(|s| self.workspace_root.join(s))).collect();
-                        let tags: Vec<String> = v.get("tags").and_then(|x| x.as_array()).unwrap_or(&vec![])
-                            .iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
+                        let json_payload = rest.trim_start();
+                        if json_payload.is_empty() {
+                            return Err(anyhow!("usage: /todo add {{json}}"));
+                        }
+                        let v: serde_json::Value = serde_json::from_str(json_payload)?;
+                        let title = v
+                            .get("title")
+                            .and_then(|x| x.as_str())
+                            .ok_or_else(|| anyhow!("title required"))?;
+                        let desc = v
+                            .get("description")
+                            .and_then(|x| x.as_str())
+                            .map(|s| s.to_string());
+                        let files: Vec<PathBuf> = v
+                            .get("files")
+                            .and_then(|x| x.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|x| x.as_str().map(|s| self.workspace_root.join(s)))
+                            .collect();
+                        let tags: Vec<String> = v
+                            .get("tags")
+                            .and_then(|x| x.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                            .collect();
                         // Capture data we need without holding a borrow across save()
                         {
                             let it = store.add(title.to_string(), desc, files, tags);
@@ -147,21 +220,39 @@ impl SlashRegistry {
                             return Ok(format!("todo added: {} ({})", title_owned, id_owned));
                         }
                     }
-                    "list" => {
+                    "list" if rest.trim().is_empty() => {
                         let mut s = String::new();
                         for it in &store.items {
-                            s.push_str(&format!("- [{}] {} ({}) {:?}\n", match it.status { TodoStatus::Open=>" ", TodoStatus::InProgress=>">", TodoStatus::Done=>"x" }, it.title, it.id, it.files));
+                            s.push_str(&format!(
+                                "- [{}] {} ({}) {:?}\n",
+                                match it.status {
+                                    TodoStatus::Open => " ",
+                                    TodoStatus::InProgress => ">",
+                                    TodoStatus::Done => "x",
+                                },
+                                it.title,
+                                it.id,
+                                it.files
+                            ));
                         }
                         Ok(s)
                     }
                     "done" => {
-                        let id = parts.get(1).ok_or_else(|| anyhow!("usage: /todo done <id>"))?;
-                        store.set_status(id, TodoStatus::Done)?; store.save(&path)?;
+                        let id = rest.trim();
+                        if id.is_empty() {
+                            return Err(anyhow!("usage: /todo done <id>"));
+                        }
+                        store.set_status(id, TodoStatus::Done)?;
+                        store.save(&path)?;
                         Ok(format!("todo {} marked done", id))
                     }
                     "rm" => {
-                        let id = parts.get(1).ok_or_else(|| anyhow!("usage: /todo rm <id>"))?;
-                        store.remove(id)?; store.save(&path)?;
+                        let id = rest.trim();
+                        if id.is_empty() {
+                            return Err(anyhow!("usage: /todo rm <id>"));
+                        }
+                        store.remove(id)?;
+                        store.save(&path)?;
                         Ok(format!("todo {} removed", id))
                     }
                     _ => Err(anyhow!("usage: /todo [add|list|done|rm] …")),
@@ -170,10 +261,21 @@ impl SlashRegistry {
             "compact" => {
                 // args JSON: {"focus":"…","include":["glob1"],"conversation_tail":"…"}
                 let v: serde_json::Value = serde_json::from_str(argstr.trim())?;
-                let focus = v.get("focus").and_then(|x| x.as_str()).map(|s| s.to_string());
-                let includes: Vec<String> = v.get("include").and_then(|x| x.as_array()).unwrap_or(&vec![])
-                    .iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
-                let tail = v.get("conversation_tail").and_then(|x| x.as_str()).unwrap_or("");
+                let focus = v
+                    .get("focus")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string());
+                let includes: Vec<String> = v
+                    .get("include")
+                    .and_then(|x| x.as_array())
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect();
+                let tail = v
+                    .get("conversation_tail")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
                 let comp = Compactor::new(self.cfg.clone(), self.workspace_root.clone());
                 let res = comp.manual_compact(focus, includes, tail)?;
                 Ok(serde_json::to_string_pretty(&res)?)
@@ -181,8 +283,12 @@ impl SlashRegistry {
             "autocompact" => {
                 let mut patch = Config::default();
                 match argstr.trim() {
-                    "on" => { patch.compact.auto_enable = true; }
-                    "off" => { patch.compact.auto_enable = false; }
+                    "on" => {
+                        patch.compact.auto_enable = true;
+                    }
+                    "off" => {
+                        patch.compact.auto_enable = false;
+                    }
                     _ => return Err(anyhow!("usage: /autocompact on|off")),
                 }
                 self.cfg.apply_runtime_overlay(patch)?;
@@ -190,5 +296,63 @@ impl SlashRegistry {
             }
             _ => Ok(format!("builtin:{} {}", name, serde_json::to_string(args)?)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{collections::BTreeMap, fs, sync::Arc};
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn todo_add_preserves_json_payload() -> anyhow::Result<()> {
+        let temp = tempdir()?;
+        let workspace_root = temp.path().to_path_buf();
+        let system_path = workspace_root.join("system").join("config.toml");
+        let user_path = workspace_root.join("user").join("config.toml");
+        let workspace_path = workspace_root.join("workspace").join("config.toml");
+        if let Some(dir) = system_path.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        if let Some(dir) = user_path.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        if let Some(dir) = workspace_path.parent() {
+            fs::create_dir_all(dir)?;
+        }
+
+        let cfg = Arc::new(ConfigManager::for_paths(
+            system_path,
+            user_path,
+            workspace_path,
+        )?);
+
+        let mut builtins = BTreeMap::new();
+        builtins.insert("todo".to_string(), BTreeMap::new());
+
+        let registry = SlashRegistry {
+            aliases: BTreeMap::new(),
+            macros: BTreeMap::new(),
+            builtins,
+            cfg: cfg.clone(),
+            workspace_root: workspace_root.clone(),
+        };
+
+        let response = registry
+            .dispatch("/todo add {\"title\": \"Fix bug\"}")
+            .await?;
+        assert!(
+            response.starts_with("todo added:"),
+            "unexpected response: {}",
+            response
+        );
+
+        let todo_path = workspace_root.join(".codex").join("todo.json");
+        let saved = TodoStore::load(&todo_path)?;
+        assert_eq!(saved.items.len(), 1);
+        assert_eq!(saved.items[0].title, "Fix bug");
+
+        Ok(())
     }
 }
