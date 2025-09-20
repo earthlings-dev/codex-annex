@@ -35,6 +35,12 @@ exclude = [
 
 [workspace]
 members = [".", "xtask"]
+# Keep external protocol repositories out of this workspace to avoid cargo
+# attempting to treat them as members when syncing/vendor operations read
+# their manifests directly.
+exclude = [
+  "external/agent-client-protocol",
+]
 
 [features]
 default = []
