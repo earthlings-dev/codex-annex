@@ -1,0 +1,11 @@
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/zed-industries/async-pipe-rs?rev=82d00a04211cf4e1236029aa03e6b6ce2a74c553"]
+git = "https://github.com/zed-industries/async-pipe-rs"
+rev = "82d00a04211cf4e1236029aa03e6b6ce2a74c553"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor/rust"
+
