@@ -364,6 +364,11 @@ sets:
   - `a2a` (`specification/`, `README.md`)
 - **Advancing upstream:** `git submodule update --remote --recursive` then commit pointer. If sparse paths change, document exact sparse‑checkout commands.
 
+**Ratatui fork (TUI):**
+- Local path: `external/ratatui/` (no `.git/`), sourced from commit `9b2ad1298408c45918ee9f8241a6f95498cdbed2` (branch `nornagon-v0.29.0-patch`).
+- Workspace patch override: `external/openai-codex/codex-rs/Cargo.toml` → `[patch.crates-io] ratatui = { path = "../../ratatui" }`.
+- Always vendor after changing ratatui or its transitive deps.
+
 ---
 
 ## Build & Install
@@ -383,6 +388,27 @@ codex --version
 codex mcp --help
 codex tasks --help
 ```
+
+**Offline builds (vendor):**
+
+- Cargo is configured to prefer vendored crates (see `.cargo/config.toml`).
+- Vendor is synced using both the Agent Client Protocol and Codex workspaces to ensure a complete mirror.
+
+```bash
+# Refresh vendor after dependency changes
+cargo vendor --locked \
+  --sync external/agent-client-protocol/Cargo.toml \
+  --sync external/openai-codex/codex-rs/Cargo.toml \
+  vendor/rust
+
+# Validate completely offline
+cargo test --manifest-path external/openai-codex/codex-rs/Cargo.toml \
+  --workspace --all-targets --all-features --offline
+```
+
+Notes:
+- If you add new workspaces or git dependencies, add their `Cargo.toml` to the `--sync` list and re‑run `cargo vendor`.
+- Keep `.cargo/config.toml` aligned; it remaps crates.io and the `async-pipe` git source to the vendored directory.
 
 ---
 
@@ -409,6 +435,7 @@ codex tasks --help
 - Redaction patterns are enforced in session logs.
 - Prefer least‑privilege env vars; never hardcode API keys or tokens.
 - Audit trails (e.g., `.codex/audit.log`) are append‑only; review regularly.
+- Debug logging: when `CODEX_DEBUG_REQUESTS=1`, Codex emits detailed HTTP debug logs via `tracing::debug!`. Use only in development; logs may include tokens. Consider masking in future hardening.
 
 ---
 
@@ -526,6 +553,7 @@ See **Quick Start** hook TOML. The `summarize-task` rule uses a **heavy** model 
 - **No model credentials:** check env vars like `OPENAI_API_KEY`. Never store in TOML.
 - **Hooks not firing:** confirm event names (`post_exec`, `task_end`) and that the hook file is in `.codex/hooks/`.
 - **Task never updates main model:** expected until TaskSet completes; check set mode (`parallel|sequential`), long‑running steps, and `on_error` policy.
+- **Offline build issues:** re‑run `cargo vendor --locked --sync ...` for every workspace with a Cargo.toml; confirm `.cargo/config.toml` maps crates.io and the `async-pipe` git source to `vendor/rust`; retry with `--offline` to validate.
 
 ---
 

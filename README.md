@@ -1,6 +1,54 @@
 # annex
 Rust-based extension to codex-rs (feature-gated, no standalone annex binary)
 
+# Ratatui Fork Integration (for TUI)
+
+We ship a local fork of `ratatui` to ensure compatibility and stability across the TUI surfaces used by Codex. The workspace pins ratatui via a crates.io patch to the local path `external/ratatui/` and vendors all Rust dependencies for offline builds.
+
+- Patch override lives in: `external/openai-codex/codex-rs/Cargo.toml` under `[patch.crates-io] ratatui = { path = "../../ratatui" }`.
+- Local sources are from commit `9b2ad1298408c45918ee9f8241a6f95498cdbed2` (branch `nornagon-v0.29.0-patch`).
+
+This keeps the runtime deterministic and avoids regressions when upstream makes breaking changes.
+
+# Offline Builds (vendor)
+
+All crates are vendored to `vendor/rust` and Cargo is configured to prefer vendored sources. This allows a fully offline build and test cycle.
+
+1) Configure Cargo to use vendored sources (already present): `.cargo/config.toml`
+
+```toml
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/zed-industries/async-pipe-rs?rev=82d00a04211cf4e1236029aa03e6b6ce2a74c553"]
+git = "https://github.com/zed-industries/async-pipe-rs"
+rev = "82d00a04211cf4e1236029aa03e6b6ce2a74c553"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor/rust"
+```
+
+2) Refresh vendor after dependency changes:
+
+```bash
+cargo vendor --locked \
+  --sync external/agent-client-protocol/Cargo.toml \
+  --sync external/openai-codex/codex-rs/Cargo.toml \
+  vendor/rust
+```
+
+3) Validate offline:
+
+```bash
+cargo test --manifest-path external/openai-codex/codex-rs/Cargo.toml \
+  --workspace --all-targets --all-features --offline
+```
+
+Hints:
+- If you add a new workspace or git dependency, add its Cargo.toml to the `--sync` list and re-run `cargo vendor`.
+- Commit both the updated `vendor/rust/` contents and any submodule pointer changes.
+
 # mods to codex-rs to integrate this package:
 
 ## Cargo.toml changes:
@@ -136,6 +184,8 @@ if input_line.starts_with('/') {
     continue;
 }
 ```
+
+Tip (agentic-first debugging): set `CODEX_DEBUG_REQUESTS=1` to enable fine‑grained HTTP request/response logs via `tracing::debug!` in the core client. Use only in local/dev contexts; it may include sensitive tokens. For future hardening consider masking tokens before logging.
 
 ## Auto-Compact Behavior at Task End
 
