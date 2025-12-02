@@ -356,7 +356,7 @@ sets:
 
 ## Submodules & External Protocol Deps
 
-- Primary submodule: `external/openai-codex` (sparse: `codex-rs`, `codex-cli`), **pin commit** for deterministic builds.
+- Primary submodule: `external/openai-codex` (earthlings-dev fork; sparse: `codex-rs`, `codex-cli`), **pin commit** for deterministic builds.
 - Protocol deps (sparse under `external/`):
   - `mcp-rust-sdk` (`crates/`, `README.md`)
   - `agent-client-protocol` (ACP) (`rust/`, `schema/`, `Cargo.toml`, `README.md`)
@@ -364,10 +364,10 @@ sets:
   - `a2a` (`specification/`, `README.md`)
 - **Advancing upstream:** `git submodule update --remote --recursive` then commit pointer. If sparse paths change, document exact sparse‑checkout commands.
 
-**Ratatui fork (TUI):**
-- Local path: `external/ratatui/` (no `.git/`), sourced from commit `9b2ad1298408c45918ee9f8241a6f95498cdbed2` (branch `nornagon-v0.29.0-patch`).
-- Workspace patch override: `external/openai-codex/codex-rs/Cargo.toml` → `[patch.crates-io] ratatui = { path = "../../ratatui" }`.
-- Always vendor after changing ratatui or its transitive deps.
+**TUI dependencies (git patched):**
+- `ratatui` from `https://github.com/takumi-earth/ratatui` (pinned via `[patch.crates-io]`, no local copy).
+- `crossterm` from `https://github.com/takumi-earth/crossterm`.
+- Always vendor after changing these or their transitive deps.
 
 ---
 

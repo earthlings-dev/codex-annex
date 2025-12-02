@@ -14,9 +14,8 @@ add() {
 
 mkdir -p "$root/external"
 
-# OpenAI's Codex (including codex-rs)
-
-add "https://github.com/openai/codex" "external/openai-codex"
+# Codex (earthlings-dev fork including codex-rs)
+add "https://github.com/earthlings-dev/codex" "external/openai-codex"
 
 # MCP Rust SDK (official)
 add "https://github.com/modelcontextprotocol/rust-sdk" "external/mcp-rust-sdk"

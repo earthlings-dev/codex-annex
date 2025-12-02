@@ -16,5 +16,5 @@
 	branch = main
 [submodule "external/openai-codex"]
 	path = external/openai-codex
-	url = https://github.com/openai/codex
+	url = https://github.com/earthlings-dev/codex
 	branch = main

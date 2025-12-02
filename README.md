@@ -1,14 +1,9 @@
 # annex
 Rust-based extension to codex-rs (feature-gated, no standalone annex binary)
 
-# Ratatui Fork Integration (for TUI)
+# TUI Fork Integration (ratatui + crossterm)
 
-We ship a local fork of `ratatui` to ensure compatibility and stability across the TUI surfaces used by Codex. The workspace pins ratatui via a crates.io patch to the local path `external/ratatui/` and vendors all Rust dependencies for offline builds.
-
-- Patch override lives in: `external/openai-codex/codex-rs/Cargo.toml` under `[patch.crates-io] ratatui = { path = "../../ratatui" }`.
-- Local sources are from commit `9b2ad1298408c45918ee9f8241a6f95498cdbed2` (branch `nornagon-v0.29.0-patch`).
-
-This keeps the runtime deterministic and avoids regressions when upstream makes breaking changes.
+We pin `ratatui` and `crossterm` via git patches to the takumi-earth forks (see `[patch.crates-io]` in `external/openai-codex/codex-rs/Cargo.toml`) to keep Codex TUI behavior deterministic. No local forks are checked in; `cargo vendor` mirrors the git sources for offline builds.
 
 # Offline Builds (vendor)
 
