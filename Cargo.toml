@@ -4,7 +4,7 @@
 name = "codex-annex"
 version = "0.0.1"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.91.1"
 license = "AGPL-3.0-or-later"
 description = "Feature-gated agent extensions for codex-rs: TaskSets, hooks, slash commands, MCP bridge, session logs, compactor."
 readme = "README.md"
